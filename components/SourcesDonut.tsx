@@ -4,13 +4,12 @@ import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "recharts";
 import type { SourceSlice } from "@/lib/services/types";
 import { formatIDR, formatPct } from "@/lib/format";
 
-const COLORS: Record<string, string> = {
-  meta: "#22d3ee",
-  google: "#d946ef",
-};
+// Palette cycles by slice index so it works for platform-split OR campaign-split.
+const PALETTE = ["#22d3ee", "#d946ef", "#8b5cf6", "#3b82f6", "#34d399", "#fbbf24"];
 
 export default function SourcesDonut({ data }: { data: SourceSlice[] }) {
   const total = data.reduce((a, s) => a + s.spend, 0);
+  const colorAt = (i: number) => PALETTE[i % PALETTE.length];
 
   return (
     <div className="relative h-full w-full">
@@ -35,8 +34,8 @@ export default function SourcesDonut({ data }: { data: SourceSlice[] }) {
             stroke="none"
             filter="url(#donutGlow)"
           >
-            {data.map((s) => (
-              <Cell key={s.platform} fill={COLORS[s.platform]} />
+            {data.map((s, i) => (
+              <Cell key={s.label} fill={colorAt(i)} />
             ))}
           </Pie>
           <Tooltip
@@ -56,11 +55,11 @@ export default function SourcesDonut({ data }: { data: SourceSlice[] }) {
       </div>
 
       {/* Legend */}
-      <div className="mt-1 flex items-center justify-center gap-4">
-        {data.map((s) => (
-          <div key={s.platform} className="flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-full" style={{ background: COLORS[s.platform] }} />
-            <span className="text-xs text-slate-300">
+      <div className="mt-1 flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
+        {data.map((s, i) => (
+          <div key={s.label} className="flex items-center gap-1.5">
+            <span className="h-2.5 w-2.5 rounded-full" style={{ background: colorAt(i) }} />
+            <span className="max-w-[130px] truncate text-xs text-slate-300" title={s.label}>
               {s.label} <span className="text-slate-500">{formatPct(s.spend / total, 0)}</span>
             </span>
           </div>

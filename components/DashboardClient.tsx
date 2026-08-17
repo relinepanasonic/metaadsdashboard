@@ -58,7 +58,7 @@ export default function DashboardClient() {
             </h1>
           </div>
           <p className="mt-1 text-xs text-slate-500">
-            Meta Ads + Google Ads · Prof Toko Online · Last 30 days
+            Meta Ads · Prof Toko Online · Last 30 days
           </p>
         </div>
         <button
@@ -94,7 +94,7 @@ export default function DashboardClient() {
 
         <Panel
           title="Ad Spend vs. Leads"
-          subtitle="Daily, combined across platforms"
+          subtitle="Daily spend and leads"
           className="lg:col-span-2"
           bodyClassName="h-[260px]"
           right={
@@ -112,7 +112,7 @@ export default function DashboardClient() {
 
       {/* Donut + Bar row */}
       <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <Panel title="Spend by Source" subtitle="Meta vs Google Ads" bodyClassName="h-[280px]">
+        <Panel title="Spend by Campaign" subtitle="Top Meta campaigns" bodyClassName="h-[280px]">
           {loading || !data ? <SkeletonBlock /> : <SourcesDonut data={data.sources} />}
         </Panel>
 

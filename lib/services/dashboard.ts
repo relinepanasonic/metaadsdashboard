@@ -50,12 +50,38 @@ function mergeTimeseries(
   return Array.from(map.values()).sort((x, y) => x.date.localeCompare(y.date));
 }
 
-export async function getUnifiedDashboardData(): Promise<UnifiedDashboardData> {
-  const [meta, google] = await Promise.all([
-    fetchMetaAdsData(),
-    fetchGoogleAdsData(),
-  ]);
+// Google Ads is mock-only for now, so it's OFF by default to avoid distorting
+// the real Meta numbers. Set ENABLE_GOOGLE_ADS=true once Google is really connected.
+const ENABLE_GOOGLE = process.env.ENABLE_GOOGLE_ADS === "true";
 
+export async function getUnifiedDashboardData(): Promise<UnifiedDashboardData> {
+  const meta = await fetchMetaAdsData();
+  const google = ENABLE_GOOGLE ? await fetchGoogleAdsData() : null;
+
+  // --- Meta-only view (default) ---
+  if (!google) {
+    const sources = meta.campaigns
+      .slice()
+      .sort((a, b) => b.spend - a.spend)
+      .slice(0, 5)
+      .map((c) => ({ platform: "meta" as const, label: c.name, spend: c.spend }));
+
+    const topCampaigns = meta.campaigns
+      .slice()
+      .sort((a, b) => b.spend - a.spend)
+      .slice(0, 6);
+
+    return {
+      kpis: meta.kpis,
+      timeseries: meta.timeseries,
+      sources,
+      topCampaigns,
+      perPlatform: [meta],
+      generatedAt: new Date().toISOString(),
+    };
+  }
+
+  // --- Combined Meta + Google view ---
   const kpis = mergeKpis(meta.kpis, google.kpis);
   const timeseries = mergeTimeseries(meta.timeseries, google.timeseries);
 
