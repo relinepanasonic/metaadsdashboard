@@ -5,6 +5,23 @@
 import type { MetaAccount, CampaignTableRow } from "./types";
 import { resolveClient } from "../clientMap";
 import { round } from "./mockUtils";
+import { db } from "../supabase/db";
+
+// Load manual campaign->client overrides from Supabase (if configured).
+async function loadClientOverrides(accountId: string): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+  if (!db) return map;
+  try {
+    const { data } = await db
+      .from("campaign_clients")
+      .select("campaign_id,client_name")
+      .eq("ad_account_id", accountId);
+    for (const row of data ?? []) map.set(row.campaign_id, row.client_name);
+  } catch {
+    // table may not exist yet — fall back to keyword inference
+  }
+  return map;
+}
 
 const TOKEN = process.env.META_ACCESS_TOKEN;
 const VERSION = process.env.META_API_VERSION || "v21.0";
@@ -131,7 +148,7 @@ interface InsightObj {
 export async function fetchMetaCampaigns(accountId: string): Promise<CampaignTableRow[]> {
   if (!TOKEN) throw new Error("Meta Ads not connected — set META_ACCESS_TOKEN.");
 
-  const [campaignsRes, insightsRes] = await Promise.all([
+  const [campaignsRes, insightsRes, overrides] = await Promise.all([
     graph<{ data: CampaignObj[] }>(`act_${accountId}/campaigns`, {
       fields: "name,status,effective_status,objective,daily_budget,lifetime_budget",
       limit: "200",
@@ -142,6 +159,7 @@ export async function fetchMetaCampaigns(accountId: string): Promise<CampaignTab
       date_preset: "last_30d",
       limit: "200",
     }),
+    loadClientOverrides(accountId),
   ]);
 
   const metrics = new Map<string, InsightObj>();
@@ -155,7 +173,7 @@ export async function fetchMetaCampaigns(accountId: string): Promise<CampaignTab
     const { value: results, label: resultLabel } = computeResult(c.objective, m?.actions);
     return {
       id: c.id,
-      client: resolveClient(c.name),
+      client: overrides.get(c.id) ?? resolveClient(c.name),
       name: c.name,
       status: c.status,
       delivery: deliveryLabel(c.effective_status),

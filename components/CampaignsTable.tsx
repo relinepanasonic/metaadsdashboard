@@ -14,10 +14,11 @@ export default function CampaignsTable() {
   const [client, setClient] = useState<string>(ALL);
   const [search, setSearch] = useState("");
   const [rows, setRows] = useState<CampaignTableRow[]>([]);
+  const [roster, setRoster] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Load accounts once.
+  // Load accounts + client roster once.
   useEffect(() => {
     (async () => {
       try {
@@ -30,7 +31,35 @@ export default function CampaignsTable() {
         setError((e as Error).message);
       }
     })();
+    fetch("/api/clients", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => j.ok && setRoster(j.clients as string[]))
+      .catch(() => {});
   }, []);
+
+  // Assign a campaign to a client (optimistic + persist to Supabase).
+  async function assignClient(campaignId: string, clientName: string) {
+    setRows((prev) => prev.map((r) => (r.id === campaignId ? { ...r, client: clientName || "Unassigned" } : r)));
+    if (clientName && !roster.includes(clientName)) setRoster((r) => [...r, clientName].sort());
+    try {
+      await fetch("/api/meta/assign-client", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ campaignId, accountId: account, clientName }),
+      });
+    } catch {
+      /* keep optimistic value; will reconcile on next load */
+    }
+  }
+
+  async function handleClientChange(campaignId: string, value: string) {
+    if (value === "__new__") {
+      const name = window.prompt("New client name:")?.trim();
+      if (name) await assignClient(campaignId, name);
+      return;
+    }
+    await assignClient(campaignId, value === "Unassigned" ? "" : value);
+  }
 
   // Load campaigns when account changes.
   useEffect(() => {
@@ -155,9 +184,22 @@ export default function CampaignsTable() {
               filtered.map((r) => (
                 <tr key={r.id} className="border-t border-white/[0.05] hover:bg-white/[0.02]">
                   <td className="sticky left-0 bg-[#0b0e14] px-3 py-2.5">
-                    <span className={`rounded-md px-2 py-0.5 text-[10px] font-semibold ${
-                      r.client === "Unassigned" ? "bg-slate-500/15 text-slate-400" : "bg-cyan-500/15 text-cyan-300"
-                    }`}>{r.client}</span>
+                    <select
+                      value={roster.includes(r.client) ? r.client : r.client === "Unassigned" ? "Unassigned" : r.client}
+                      onChange={(e) => handleClientChange(r.id, e.target.value)}
+                      className={`rounded-md border border-transparent bg-white/[0.04] px-2 py-1 text-[11px] font-semibold hover:border-white/[0.15] focus:border-cyan-500/50 focus:outline-none ${
+                        r.client === "Unassigned" ? "text-slate-400" : "text-cyan-300"
+                      }`}
+                    >
+                      <option value="Unassigned">Unassigned</option>
+                      {!roster.includes(r.client) && r.client !== "Unassigned" && (
+                        <option value={r.client}>{r.client}</option>
+                      )}
+                      {roster.map((c) => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                      <option value="__new__">＋ Add new…</option>
+                    </select>
                   </td>
                   <td className="max-w-[240px] truncate px-3 py-2.5 font-medium text-slate-100" title={r.name}>{r.name}</td>
                   <td className="px-3 py-2.5">
