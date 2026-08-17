@@ -1,3 +1,108 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+:root {
+  --bg-base: #0b0e14;
+  --bg-panel: rgba(20, 26, 40, 0.55);
+  --neon-cyan: #22d3ee;
+  --neon-blue: #3b82f6;
+  --neon-magenta: #d946ef;
+  --neon-violet: #8b5cf6;
+}
+
+html,
+body {
+  background:
+    radial-gradient(1200px 800px at 15% -10%, rgba(59, 130, 246, 0.12), transparent 55%),
+    radial-gradient(1000px 700px at 100% 0%, rgba(217, 70, 239, 0.10), transparent 50%),
+    radial-gradient(900px 900px at 50% 120%, rgba(34, 211, 238, 0.08), transparent 55%),
+    var(--bg-base);
+  color: #e5e9f0;
+  min-height: 100vh;
+}
+
+/* Faint grid overlay for the sci-fi feel */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(90, 120, 200, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(90, 120, 200, 0.05) 1px, transparent 1px);
+  background-size: 44px 44px;
+  z-index: 0;
+}
+
+@layer components {
+  .glass-panel {
+    background: var(--bg-panel);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid rgba(120, 160, 255, 0.15);
+    border-radius: 1rem;
+    box-shadow:
+      0 0 0 1px rgba(120, 160, 255, 0.04),
+      0 8px 40px rgba(0, 0, 0, 0.45),
+      inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  }
+
+  .glass-panel-hover {
+    transition: box-shadow 0.3s ease, border-color 0.3s ease, transform 0.3s ease;
+  }
+  .glass-panel-hover:hover {
+    border-color: rgba(34, 211, 238, 0.4);
+    box-shadow:
+      0 0 24px rgba(34, 211, 238, 0.18),
+      0 8px 40px rgba(0, 0, 0, 0.5);
+    transform: translateY(-2px);
+  }
+
+  .neon-text-cyan {
+    color: var(--neon-cyan);
+    text-shadow: 0 0 12px rgba(34, 211, 238, 0.55);
+  }
+  .neon-text-magenta {
+    color: var(--neon-magenta);
+    text-shadow: 0 0 12px rgba(217, 70, 239, 0.55);
+  }
+  .neon-text-blue {
+    color: var(--neon-blue);
+    text-shadow: 0 0 12px rgba(59, 130, 246, 0.55);
+  }
+}
+
+/* Recharts tooltip theming */
+.recharts-default-tooltip {
+  background: rgba(11, 14, 20, 0.92) !important;
+  border: 1px solid rgba(34, 211, 238, 0.35) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 0 24px rgba(34, 211, 238, 0.2) !important;
+}
+
+/* Pulsing node animation for the API flow section */
+@keyframes pulse-node {
+  0%, 100% { opacity: 1; box-shadow: 0 0 10px 2px currentColor; }
+  50% { opacity: 0.55; box-shadow: 0 0 18px 5px currentColor; }
+}
+.pulse-node {
+  animation: pulse-node 2s ease-in-out infinite;
+}
+
+/* Flowing dash animation for connector lines */
+@keyframes flow-dash {
+  to { stroke-dashoffset: -24; }
+}
+.flow-line {
+  stroke-dasharray: 4 6;
+  animation: flow-dash 1s linear infinite;
+}
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: rgba(255,255,255,0.02); }
+::-webkit-scrollbar-thumb {
+  background: rgba(120, 160, 255, 0.25);
+  border-radius: 8px;
+}
+::-webkit-scrollbar-thumb:hover { background: rgba(34, 211, 238, 0.4); }

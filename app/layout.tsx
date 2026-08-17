@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Prof Meta Ads Dashboard",
-  description: "Meta Ads performance dashboard for Profesor Toko Online",
+  title: "Unified Ads Command Center · Prof Toko Online",
+  description: "Meta Ads + Google Ads unified analytics dashboard",
 };
 
 export default function RootLayout({
@@ -13,7 +13,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="id">
-      <body className="bg-gray-950 text-white antialiased">{children}</body>
+      <body className="antialiased">{children}</body>
     </html>
   );
 }
