@@ -5,7 +5,9 @@ import {
   Wallet,
   Eye,
   MousePointerClick,
-  TrendingUp,
+  MessageCircle,
+  Target,
+  Percent,
   RefreshCw,
   Activity,
 } from "lucide-react";
@@ -82,24 +84,24 @@ export default function DashboardClient() {
             <SkeletonKpis />
           ) : (
             <>
-              <KpiCard label="Total Spend" value={formatIDR(data.kpis.totalSpend)} delta="8.2%" deltaPositive icon={Wallet} accent="cyan" />
-              <KpiCard label="Impressions" value={formatNumber(data.kpis.impressions)} delta="12.5%" deltaPositive icon={Eye} accent="blue" />
-              <KpiCard label="Clicks" value={formatNumber(data.kpis.clicks)} delta="4.1%" deltaPositive icon={MousePointerClick} accent="magenta" />
-              <KpiCard label="ROAS" value={`${data.kpis.roas.toFixed(2)}x`} delta="0.3x" deltaPositive icon={TrendingUp} accent="violet" />
+              <KpiCard label="Total Spend" value={formatIDR(data.kpis.totalSpend)} icon={Wallet} accent="magenta" />
+              <KpiCard label="Leads" value={formatNumber(data.kpis.leads)} icon={MessageCircle} accent="cyan" />
+              <KpiCard label="Cost / Lead" value={formatIDR(data.kpis.costPerLead, false)} icon={Target} accent="violet" />
+              <KpiCard label="CTR" value={formatPct(data.kpis.ctr)} icon={Percent} accent="blue" />
             </>
           )}
         </div>
 
         <Panel
-          title="Ad Spend vs. Revenue"
+          title="Ad Spend vs. Leads"
           subtitle="Daily, combined across platforms"
           className="lg:col-span-2"
           bodyClassName="h-[260px]"
           right={
             data && (
               <div className="text-right">
-                <div className="neon-text-cyan text-lg font-black">{formatIDR(data.kpis.revenue)}</div>
-                <div className="text-[10px] text-slate-500">total revenue</div>
+                <div className="neon-text-cyan text-lg font-black">{formatNumber(data.kpis.leads)}</div>
+                <div className="text-[10px] text-slate-500">total leads</div>
               </div>
             )
           }
@@ -116,7 +118,7 @@ export default function DashboardClient() {
 
         <Panel
           title="Top Performing Campaigns"
-          subtitle="Ranked by revenue"
+          subtitle="Ranked by spend"
           className="lg:col-span-2"
           bodyClassName="h-[280px]"
         >
@@ -127,10 +129,10 @@ export default function DashboardClient() {
       {/* Secondary KPI strip */}
       {data && !loading && (
         <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <MiniStat label="Conversions" value={formatNumber(data.kpis.conversions)} />
-          <MiniStat label="Avg CTR" value={formatPct(data.kpis.ctr)} />
+          <MiniStat label="Impressions" value={formatNumber(data.kpis.impressions)} />
+          <MiniStat label="Clicks" value={formatNumber(data.kpis.clicks)} />
           <MiniStat label="Avg CPC" value={formatIDR(data.kpis.cpc, false)} />
-          <MiniStat label="Total Revenue" value={formatIDR(data.kpis.revenue)} />
+          <MiniStat label="Lead Conv. Rate" value={data.kpis.clicks > 0 ? formatPct(data.kpis.leads / data.kpis.clicks) : "—"} />
         </div>
       )}
 

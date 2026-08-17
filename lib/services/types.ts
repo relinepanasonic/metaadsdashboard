@@ -9,7 +9,9 @@ export interface KpiSummary {
   impressions: number;
   clicks: number;
   conversions: number;
-  revenue: number;
+  leads: number; // messaging conversations / lead-form submissions
+  costPerLead: number; // spend / leads
+  revenue: number; // purchase value (0 for lead-gen accounts)
   roas: number; // revenue / spend
   ctr: number; // clicks / impressions (0..1)
   cpc: number; // spend / clicks
@@ -19,6 +21,7 @@ export interface TimeseriesPoint {
   date: string; // YYYY-MM-DD
   spend: number;
   revenue: number;
+  leads: number;
 }
 
 export interface SourceSlice {

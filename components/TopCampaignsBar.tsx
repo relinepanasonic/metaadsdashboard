@@ -50,9 +50,9 @@ export default function TopCampaignsBar({ data }: { data: CampaignRow[] }) {
         />
         <Tooltip
           cursor={{ fill: "rgba(120,160,255,0.06)" }}
-          formatter={(value) => [formatIDR(Number(value) || 0, false), "Revenue"]}
+          formatter={(value) => [formatIDR(Number(value) || 0, false), "Spend"]}
         />
-        <Bar dataKey="revenue" radius={[0, 6, 6, 0]} barSize={16}>
+        <Bar dataKey="spend" radius={[0, 6, 6, 0]} barSize={16}>
           {rows.map((r) => (
             <Cell key={r.id} fill={r.platform === "meta" ? "url(#barMeta)" : "url(#barGoogle)"} />
           ))}

@@ -16,14 +16,17 @@ function mergeKpis(a: KpiSummary, b: KpiSummary): KpiSummary {
   const impressions = a.impressions + b.impressions;
   const clicks = a.clicks + b.clicks;
   const conversions = a.conversions + b.conversions;
+  const leads = a.leads + b.leads;
   const revenue = a.revenue + b.revenue;
   return {
     totalSpend,
     impressions,
     clicks,
     conversions,
+    leads,
+    costPerLead: leads > 0 ? round(totalSpend / leads, 0) : 0,
     revenue,
-    roas: round(revenue / totalSpend, 2),
+    roas: revenue > 0 && totalSpend > 0 ? round(revenue / totalSpend, 2) : 0,
     ctr: round(clicks / impressions, 4),
     cpc: round(totalSpend / clicks, 0),
   };
@@ -39,6 +42,7 @@ function mergeTimeseries(
     if (existing) {
       existing.spend = round(existing.spend + p.spend, 0);
       existing.revenue = round(existing.revenue + p.revenue, 0);
+      existing.leads += p.leads;
     } else {
       map.set(p.date, { ...p });
     }
@@ -61,7 +65,7 @@ export async function getUnifiedDashboardData(): Promise<UnifiedDashboardData> {
   ];
 
   const topCampaigns: CampaignRow[] = [...meta.campaigns, ...google.campaigns]
-    .sort((a, b) => b.revenue - a.revenue)
+    .sort((a, b) => b.spend - a.spend)
     .slice(0, 6);
 
   return {

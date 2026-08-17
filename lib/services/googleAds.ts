@@ -39,27 +39,25 @@ function buildGoogleMock(): PlatformDataset {
   const timeseries: TimeseriesPoint[] = dates.map((date, i) => {
     const base = 260000 + Math.cos(i / 4) * 70000 + rand() * 90000;
     const spend = round(base, 0);
-    const revenue = round(spend * (2.0 + rand() * 1.3), 0);
-    return { date, spend, revenue };
+    return { date, spend, revenue: 0, leads: Math.round(spend / 16000 + rand() * 3) };
   });
 
   const totalSpend = timeseries.reduce((a, p) => a + p.spend, 0);
-  const totalRevenue = timeseries.reduce((a, p) => a + p.revenue, 0);
   const impressions = Math.round(totalSpend / 18);
   const clicks = Math.round(impressions * 0.045);
-  const conversions = Math.round(clicks * 0.12);
+  const conversions = timeseries.reduce((a, p) => a + p.leads, 0);
 
   const campaigns: CampaignRow[] = GOOGLE_CAMPAIGN_NAMES.map((name, i) => {
     const spend = round((totalSpend / 5) * (0.6 + rand()), 0);
-    const roas = round(1.8 + rand() * 2.0, 2);
+    const conv = Math.round(spend / 16000);
     return {
       id: `google-${i + 1}`,
       name,
       platform: "google",
       spend,
-      revenue: round(spend * roas, 0),
-      roas,
-      conversions: Math.round(spend / 16000),
+      revenue: conv,
+      roas: 0,
+      conversions: conv,
     };
   });
 
@@ -70,8 +68,10 @@ function buildGoogleMock(): PlatformDataset {
       impressions,
       clicks,
       conversions,
-      revenue: totalRevenue,
-      roas: round(totalRevenue / totalSpend, 2),
+      leads: conversions,
+      costPerLead: conversions > 0 ? round(totalSpend / conversions, 0) : 0,
+      revenue: 0,
+      roas: 0,
       ctr: round(clicks / impressions, 4),
       cpc: round(totalSpend / clicks, 0),
     },

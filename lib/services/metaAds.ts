@@ -84,6 +84,7 @@ async function fetchLive(): Promise<PlatformDataset> {
     date: r.date_start ?? "",
     spend: round(Number(r.spend) || 0, 0),
     revenue: round(actionValue(r.action_values, PURCHASE_VALUE_TYPES), 0),
+    leads: Math.round(actionValue(r.actions, CONVERSATION_TYPES)),
   }));
 
   const totalSpend = daily.reduce((a, r) => a + (Number(r.spend) || 0), 0);
@@ -91,6 +92,7 @@ async function fetchLive(): Promise<PlatformDataset> {
   const clicks = daily.reduce((a, r) => a + (Number(r.clicks) || 0), 0);
   const conversions = daily.reduce((a, r) => a + actionValue(r.actions, CONVERSATION_TYPES), 0);
   const revenue = timeseries.reduce((a, p) => a + p.revenue, 0);
+  const leads = conversions;
 
   // 2) Campaign-level insights → top campaigns
   const campaignRows = await graphGet(`act_${ACCOUNT}/insights`, {
@@ -125,6 +127,8 @@ async function fetchLive(): Promise<PlatformDataset> {
       impressions,
       clicks,
       conversions,
+      leads,
+      costPerLead: leads > 0 ? round(totalSpend / leads, 0) : 0,
       revenue: round(revenue, 0),
       roas: revenue > 0 && totalSpend > 0 ? round(revenue / totalSpend, 2) : 0,
       ctr: impressions > 0 ? round(clicks / impressions, 4) : 0,
@@ -150,24 +154,23 @@ function buildMetaMock(): PlatformDataset {
   const timeseries: TimeseriesPoint[] = dates.map((date, i) => {
     const base = 380000 + Math.sin(i / 3) * 90000 + rand() * 120000;
     const spend = round(base, 0);
-    const revenue = round(spend * (2.4 + rand() * 1.6), 0);
-    return { date, spend, revenue };
+    return { date, spend, revenue: 0, leads: Math.round(spend / 14000 + rand() * 4) };
   });
   const totalSpend = timeseries.reduce((a, p) => a + p.spend, 0);
-  const totalRevenue = timeseries.reduce((a, p) => a + p.revenue, 0);
   const impressions = Math.round(totalSpend / 22);
   const clicks = Math.round(impressions * 0.031);
-  const conversions = Math.round(clicks * 0.18);
+  const conversions = timeseries.reduce((a, p) => a + p.leads, 0);
   const campaigns: CampaignRow[] = META_CAMPAIGN_NAMES.map((name, i) => {
     const spend = round((totalSpend / 5) * (0.6 + rand()), 0);
-    const roas = round(2.1 + rand() * 2.2, 2);
-    return { id: `meta-${i + 1}`, name, platform: "meta", spend, revenue: round(spend * roas, 0), roas, conversions: Math.round(spend / 14000) };
+    const conv = Math.round(spend / 14000);
+    return { id: `meta-${i + 1}`, name, platform: "meta", spend, revenue: conv, roas: 0, conversions: conv };
   });
   return {
     platform: "meta",
     kpis: {
-      totalSpend, impressions, clicks, conversions, revenue: totalRevenue,
-      roas: round(totalRevenue / totalSpend, 2),
+      totalSpend, impressions, clicks, conversions, leads: conversions,
+      costPerLead: conversions > 0 ? round(totalSpend / conversions, 0) : 0,
+      revenue: 0, roas: 0,
       ctr: round(clicks / impressions, 4),
       cpc: round(totalSpend / clicks, 0),
     },
