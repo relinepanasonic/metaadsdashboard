@@ -47,6 +47,30 @@ export interface PlatformDataset {
   campaigns: CampaignRow[];
 }
 
+// --- Campaigns table (Meta Ads page) ---
+export interface MetaAccount {
+  id: string; // numeric, without act_
+  name: string;
+  business: string; // business/portfolio name, or "" if none
+}
+
+export interface CampaignTableRow {
+  id: string;
+  client: string; // resolved from campaign name
+  name: string;
+  status: string; // ACTIVE | PAUSED | IN_DRAFT | ...
+  delivery: string; // human label: Active / Off / In draft
+  objective: string;
+  resultLabel: string; // e.g. "Messaging conversations"
+  results: number;
+  costPerResult: number;
+  dailyBudget: number; // 0 if none
+  lifetimeBudget: number; // 0 if none
+  spend: number;
+  impressions: number;
+  reach: number;
+}
+
 // The unified payload the dashboard consumes.
 export interface UnifiedDashboardData {
   kpis: KpiSummary; // combined across platforms
