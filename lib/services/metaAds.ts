@@ -1,9 +1,8 @@
 // ============================================================================
-// META ADS SERVICE  — LIVE via Meta Graph API (Marketing API insights)
+// META ADS SERVICE  — LIVE ONLY (Meta Graph API / Marketing API insights)
 // ----------------------------------------------------------------------------
-// If META_ACCESS_TOKEN is set, this fetches real data from the Graph API.
-// If it's missing (e.g. local dev without secrets), it falls back to mock data
-// so the app never breaks. Return type stays PlatformDataset either way.
+// No mock data. If the token is missing or the API fails, this throws — the
+// dashboard then shows a "not connected" state instead of fake numbers.
 //
 // Env vars (server-side only — never NEXT_PUBLIC):
 //   META_ACCESS_TOKEN     System User token with ads_read
@@ -12,14 +11,15 @@
 // ============================================================================
 
 import type { PlatformDataset, TimeseriesPoint, CampaignRow } from "./types";
-import { seededRandom, lastNDates, delay, round } from "./mockUtils";
+import { round } from "./mockUtils";
 
 const TOKEN = process.env.META_ACCESS_TOKEN;
 const ACCOUNT = process.env.META_AD_ACCOUNT_ID || "1153490826516966";
 const VERSION = process.env.META_API_VERSION || "v21.0";
 const BASE = `https://graph.facebook.com/${VERSION}`;
 
-// --- Graph API response shapes (only the fields we request) ---------------
+export const META_CONNECTED = Boolean(TOKEN);
+
 interface MetaAction {
   action_type: string;
   value: string;
@@ -39,7 +39,6 @@ interface MetaInsightRow {
   campaign_name?: string;
 }
 
-// Sum the value of the first matching action type (in priority order).
 function actionValue(actions: MetaAction[] | undefined, types: string[]): number {
   if (!actions) return 0;
   for (const t of types) {
@@ -55,7 +54,6 @@ const CONVERSATION_TYPES = [
   "onsite_conversion.total_messaging_connection",
   "lead",
 ];
-// Purchase value (revenue) — usually 0 for lead-gen accounts.
 const PURCHASE_VALUE_TYPES = ["omni_purchase", "purchase"];
 
 async function graphGet(path: string, params: Record<string, string>): Promise<MetaInsightRow[]> {
@@ -71,7 +69,11 @@ async function graphGet(path: string, params: Record<string, string>): Promise<M
   return json.data ?? [];
 }
 
-async function fetchLive(): Promise<PlatformDataset> {
+export async function fetchMetaAdsData(): Promise<PlatformDataset> {
+  if (!TOKEN) {
+    throw new Error("Meta Ads not connected — set META_ACCESS_TOKEN.");
+  }
+
   // 1) Daily account insights → timeseries + aggregate KPIs
   const daily = await graphGet(`act_${ACCOUNT}/insights`, {
     fields: "spend,impressions,clicks,ctr,cpc,reach,actions,action_values",
@@ -112,7 +114,6 @@ async function fetchLive(): Promise<PlatformDataset> {
         name: r.campaign_name ?? "Untitled",
         platform: "meta" as const,
         spend,
-        // For lead-gen (no revenue), rank by conversions*spend proxy so bars aren't all 0.
         revenue: rev > 0 ? rev : conv,
         roas: rev > 0 && spend > 0 ? round(rev / spend, 2) : 0,
         conversions: conv,
@@ -137,56 +138,4 @@ async function fetchLive(): Promise<PlatformDataset> {
     timeseries,
     campaigns,
   };
-}
-
-// --------------------------- MOCK FALLBACK --------------------------------
-const META_CAMPAIGN_NAMES = [
-  "WA Leads — Broad AI",
-  "WA Leads — Seller Interest",
-  "Retargeting 30d Warm",
-  "Live Shopping Promo",
-  "Audit Gratis — Cold",
-];
-
-function buildMetaMock(): PlatformDataset {
-  const rand = seededRandom(42);
-  const dates = lastNDates(30);
-  const timeseries: TimeseriesPoint[] = dates.map((date, i) => {
-    const base = 380000 + Math.sin(i / 3) * 90000 + rand() * 120000;
-    const spend = round(base, 0);
-    return { date, spend, revenue: 0, leads: Math.round(spend / 14000 + rand() * 4) };
-  });
-  const totalSpend = timeseries.reduce((a, p) => a + p.spend, 0);
-  const impressions = Math.round(totalSpend / 22);
-  const clicks = Math.round(impressions * 0.031);
-  const conversions = timeseries.reduce((a, p) => a + p.leads, 0);
-  const campaigns: CampaignRow[] = META_CAMPAIGN_NAMES.map((name, i) => {
-    const spend = round((totalSpend / 5) * (0.6 + rand()), 0);
-    const conv = Math.round(spend / 14000);
-    return { id: `meta-${i + 1}`, name, platform: "meta", spend, revenue: conv, roas: 0, conversions: conv };
-  });
-  return {
-    platform: "meta",
-    kpis: {
-      totalSpend, impressions, clicks, conversions, leads: conversions,
-      costPerLead: conversions > 0 ? round(totalSpend / conversions, 0) : 0,
-      revenue: 0, roas: 0,
-      ctr: round(clicks / impressions, 4),
-      cpc: round(totalSpend / clicks, 0),
-    },
-    timeseries, campaigns,
-  };
-}
-
-export async function fetchMetaAdsData(): Promise<PlatformDataset> {
-  if (!TOKEN) {
-    // No token configured — safe mock fallback.
-    return delay(buildMetaMock(), 450);
-  }
-  try {
-    return await fetchLive();
-  } catch (err) {
-    console.error("[metaAds] live fetch failed, using mock:", (err as Error).message);
-    return buildMetaMock();
-  }
 }

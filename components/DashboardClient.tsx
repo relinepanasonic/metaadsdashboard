@@ -72,11 +72,27 @@ export default function DashboardClient() {
       </header>
 
       {error && (
-        <div className="glass-panel mb-6 border-rose-500/40 p-4 text-sm text-rose-300">
-          Failed to load dashboard: {error}
+        <div className="glass-panel mb-6 p-6" style={{ boxShadow: "inset 0 0 0 1px rgba(251,191,36,0.3)" }}>
+          <div className="flex items-start gap-3">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg" style={{ background: "rgba(251,191,36,0.12)" }}>
+              <Activity size={18} className="text-amber-400" />
+            </span>
+            <div>
+              <h3 className="text-sm font-bold text-amber-300">No live data yet</h3>
+              <p className="mt-1 text-xs text-slate-400">
+                The dashboard shows real data only. It couldn&apos;t reach a connected ad account.
+              </p>
+              <p className="mt-2 rounded bg-white/[0.04] px-3 py-2 font-mono text-[11px] text-slate-400">{error}</p>
+              <p className="mt-2 text-xs text-slate-500">
+                Add <code className="text-cyan-300">META_ACCESS_TOKEN</code> to your environment, then click Refresh.
+              </p>
+            </div>
+          </div>
         </div>
       )}
 
+      {!error && (
+      <>
       {/* KPI + Line chart row */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="grid grid-cols-2 gap-4 lg:col-span-1">
@@ -135,6 +151,8 @@ export default function DashboardClient() {
           <MiniStat label="Lead Conv. Rate" value={data.kpis.clicks > 0 ? formatPct(data.kpis.leads / data.kpis.clicks) : "—"} />
         </div>
       )}
+      </>
+      )}
 
       {/* API flow */}
       <div className="mt-4">
@@ -143,7 +161,7 @@ export default function DashboardClient() {
 
       <footer className="mt-6 text-center text-[11px] text-slate-600">
         {data ? `Data generated ${new Date(data.generatedAt).toLocaleString("id-ID")} · ` : ""}
-        Mock data — swap service files for live Meta Graph API & Google Ads SDK
+        Live data — Meta Graph API (act_1153490826516966)
       </footer>
     </div>
   );

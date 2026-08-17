@@ -26,8 +26,8 @@ const STATUS_COLOR: Record<Status, string> = {
 };
 
 const SOURCES: Node[] = [
-  { key: "meta", label: "Meta Graph API", sublabel: "act_1153490826516966", icon: Share2, status: "mock", color: "#22d3ee" },
-  { key: "google", label: "Google Ads API", sublabel: "google-ads-api SDK", icon: Globe, status: "mock", color: "#d946ef" },
+  { key: "meta", label: "Meta Graph API", sublabel: "act_1153490826516966", icon: Share2, status: "online", color: "#22d3ee" },
+  { key: "google", label: "Google Ads API", sublabel: "not connected", icon: Globe, status: "offline", color: "#d946ef" },
 ];
 
 const BACKEND: Node[] = [

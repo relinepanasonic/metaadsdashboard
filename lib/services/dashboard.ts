@@ -8,7 +8,7 @@ import type {
   CampaignRow,
 } from "./types";
 import { fetchMetaAdsData } from "./metaAds";
-import { fetchGoogleAdsData } from "./googleAds";
+import { fetchGoogleAdsData, GOOGLE_CONNECTED } from "./googleAds";
 import { round } from "./mockUtils";
 
 function mergeKpis(a: KpiSummary, b: KpiSummary): KpiSummary {
@@ -50,13 +50,11 @@ function mergeTimeseries(
   return Array.from(map.values()).sort((x, y) => x.date.localeCompare(y.date));
 }
 
-// Google Ads is mock-only for now, so it's OFF by default to avoid distorting
-// the real Meta numbers. Set ENABLE_GOOGLE_ADS=true once Google is really connected.
-const ENABLE_GOOGLE = process.env.ENABLE_GOOGLE_ADS === "true";
-
+// Only combine Google when it's actually connected (real credentials present).
+// No mock data — if Google isn't connected, the dashboard is Meta-only.
 export async function getUnifiedDashboardData(): Promise<UnifiedDashboardData> {
   const meta = await fetchMetaAdsData();
-  const google = ENABLE_GOOGLE ? await fetchGoogleAdsData() : null;
+  const google = GOOGLE_CONNECTED ? await fetchGoogleAdsData() : null;
 
   // --- Meta-only view (default) ---
   if (!google) {
