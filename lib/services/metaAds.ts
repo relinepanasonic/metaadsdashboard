@@ -4,6 +4,10 @@
 // No mock data. If the token is missing or the API fails, this throws — the
 // dashboard then shows a "not connected" state instead of fake numbers.
 //
+// Always fetches at campaign+daily granularity (level=campaign, time_increment=1)
+// so a client filter can be applied consistently to both the KPI totals and the
+// day-by-day chart, not just the campaign list.
+//
 // Env vars (server-side only — never NEXT_PUBLIC):
 //   META_ACCESS_TOKEN     System User token with ads_read
 //   META_AD_ACCOUNT_ID    default account id, e.g. 1153490826516966
@@ -12,6 +16,8 @@
 
 import type { PlatformDataset, TimeseriesPoint, CampaignRow } from "./types";
 import { round } from "./mockUtils";
+import { resolveClient } from "../clientMap";
+import { loadClientOverrides, type DateRange } from "./metaCampaigns";
 
 const TOKEN = process.env.META_ACCESS_TOKEN;
 const DEFAULT_ACCOUNT = process.env.META_AD_ACCOUNT_ID || "1153490826516966";
@@ -52,6 +58,13 @@ const CONVERSATION_TYPES = [
 ];
 const PURCHASE_VALUE_TYPES = ["omni_purchase", "purchase"];
 
+function dateParams(range?: DateRange): Record<string, string> {
+  if (range?.since && range?.until) {
+    return { time_range: JSON.stringify({ since: range.since, until: range.until }) };
+  }
+  return { date_preset: range?.preset || "last_30d" };
+}
+
 async function graphGet(path: string, params: Record<string, string>): Promise<MetaInsightRow[]> {
   const usp = new URLSearchParams({ ...params, access_token: TOKEN! });
   const res = await fetch(`${BASE}/${path}?${usp.toString()}`, {
@@ -65,66 +78,92 @@ async function graphGet(path: string, params: Record<string, string>): Promise<M
   return json.data ?? [];
 }
 
-// Fetch + shape data for a single ad account.
-async function fetchForAccount(accountId: string): Promise<PlatformDataset> {
-  const daily = await graphGet(`act_${accountId}/insights`, {
-    fields: "spend,impressions,clicks,actions,action_values",
-    date_preset: "last_30d",
-    time_increment: "1",
-    level: "account",
-  });
+// Fetch + shape data for a single ad account, optionally scoped to one client.
+async function fetchForAccount(accountId: string, range?: DateRange, clientFilter?: string): Promise<PlatformDataset> {
+  const [rows, overrides] = await Promise.all([
+    graphGet(`act_${accountId}/insights`, {
+      fields: "campaign_id,campaign_name,spend,impressions,clicks,actions,action_values",
+      level: "campaign",
+      time_increment: "1",
+      limit: "500",
+      ...dateParams(range),
+    }),
+    loadClientOverrides(accountId),
+  ]);
 
-  const timeseries: TimeseriesPoint[] = daily.map((r) => ({
-    date: r.date_start ?? "",
-    spend: round(Number(r.spend) || 0, 0),
-    revenue: round(actionValue(r.action_values, PURCHASE_VALUE_TYPES), 0),
-    leads: Math.round(actionValue(r.actions, CONVERSATION_TYPES)),
-  }));
+  const clientOf = (id: string, name: string) => overrides.get(id) ?? resolveClient(name);
+  const rowsInScope = clientFilter
+    ? rows.filter((r) => clientOf(r.campaign_id ?? "", r.campaign_name ?? "") === clientFilter)
+    : rows;
 
-  const totalSpend = daily.reduce((a, r) => a + (Number(r.spend) || 0), 0);
-  const impressions = daily.reduce((a, r) => a + (Number(r.impressions) || 0), 0);
-  const clicks = daily.reduce((a, r) => a + (Number(r.clicks) || 0), 0);
-  const conversions = daily.reduce((a, r) => a + actionValue(r.actions, CONVERSATION_TYPES), 0);
-  const revenue = timeseries.reduce((a, p) => a + p.revenue, 0);
-  const leads = conversions;
+  // Daily timeseries (sum across campaigns per date).
+  const tsMap = new Map<string, TimeseriesPoint>();
+  for (const r of rowsInScope) {
+    const date = r.date_start ?? "";
+    const spend = round(Number(r.spend) || 0, 0);
+    const leads = Math.round(actionValue(r.actions, CONVERSATION_TYPES));
+    const revenue = round(actionValue(r.action_values, PURCHASE_VALUE_TYPES), 0);
+    const existing = tsMap.get(date);
+    if (existing) {
+      existing.spend = round(existing.spend + spend, 0);
+      existing.leads += leads;
+      existing.revenue = round(existing.revenue + revenue, 0);
+    } else {
+      tsMap.set(date, { date, spend, leads, revenue });
+    }
+  }
+  const timeseries = Array.from(tsMap.values()).sort((a, b) => a.date.localeCompare(b.date));
 
-  const campaignRows = await graphGet(`act_${accountId}/insights`, {
-    fields: "campaign_id,campaign_name,spend,actions,action_values",
-    date_preset: "last_30d",
-    level: "campaign",
-    limit: "50",
-  });
+  // Per-campaign totals (sum across days per campaign) for the KPI cards + top campaigns.
+  interface CampaignAgg { name: string; spend: number; impressions: number; clicks: number; leads: number; revenue: number }
+  const byCampaign = new Map<string, CampaignAgg>();
+  for (const r of rowsInScope) {
+    const id = r.campaign_id ?? r.campaign_name ?? "unknown";
+    const agg = byCampaign.get(id) ?? { name: r.campaign_name ?? "Untitled", spend: 0, impressions: 0, clicks: 0, leads: 0, revenue: 0 };
+    agg.spend += Number(r.spend) || 0;
+    agg.impressions += Number(r.impressions) || 0;
+    agg.clicks += Number(r.clicks) || 0;
+    agg.leads += actionValue(r.actions, CONVERSATION_TYPES);
+    agg.revenue += actionValue(r.action_values, PURCHASE_VALUE_TYPES);
+    byCampaign.set(id, agg);
+  }
 
-  const campaigns: CampaignRow[] = campaignRows
-    .map((r) => {
-      const spend = round(Number(r.spend) || 0, 0);
-      const rev = round(actionValue(r.action_values, PURCHASE_VALUE_TYPES), 0);
-      const conv = actionValue(r.actions, CONVERSATION_TYPES);
-      return {
-        id: r.campaign_id ?? r.campaign_name ?? Math.random().toString(36),
-        name: r.campaign_name ?? "Untitled",
-        platform: "meta" as const,
-        spend,
-        revenue: rev > 0 ? rev : conv,
-        roas: rev > 0 && spend > 0 ? round(rev / spend, 2) : 0,
-        conversions: conv,
-      };
-    })
+  const campaigns: CampaignRow[] = Array.from(byCampaign.entries())
+    .map(([id, c]) => ({
+      id,
+      name: c.name,
+      platform: "meta" as const,
+      spend: round(c.spend, 0),
+      revenue: c.revenue > 0 ? round(c.revenue, 0) : Math.round(c.leads),
+      roas: c.revenue > 0 && c.spend > 0 ? round(c.revenue / c.spend, 2) : 0,
+      conversions: Math.round(c.leads),
+    }))
     .filter((c) => c.spend > 0);
+
+  const totals = Array.from(byCampaign.values()).reduce(
+    (a, c) => ({
+      spend: a.spend + c.spend,
+      impressions: a.impressions + c.impressions,
+      clicks: a.clicks + c.clicks,
+      leads: a.leads + c.leads,
+      revenue: a.revenue + c.revenue,
+    }),
+    { spend: 0, impressions: 0, clicks: 0, leads: 0, revenue: 0 }
+  );
 
   return {
     platform: "meta",
     kpis: {
-      totalSpend: round(totalSpend, 0),
-      impressions,
-      clicks,
-      conversions,
-      leads,
-      costPerLead: leads > 0 ? round(totalSpend / leads, 0) : 0,
-      revenue: round(revenue, 0),
-      roas: revenue > 0 && totalSpend > 0 ? round(revenue / totalSpend, 2) : 0,
-      ctr: impressions > 0 ? round(clicks / impressions, 4) : 0,
-      cpc: clicks > 0 ? round(totalSpend / clicks, 0) : 0,
+      totalSpend: round(totals.spend, 0),
+      impressions: totals.impressions,
+      clicks: totals.clicks,
+      conversions: Math.round(totals.leads),
+      leads: Math.round(totals.leads),
+      costPerLead: totals.leads > 0 ? round(totals.spend / totals.leads, 0) : 0,
+      revenue: round(totals.revenue, 0),
+      roas: totals.revenue > 0 && totals.spend > 0 ? round(totals.revenue / totals.spend, 2) : 0,
+      ctr: totals.impressions > 0 ? round(totals.clicks / totals.impressions, 4) : 0,
+      cpc: totals.clicks > 0 ? round(totals.spend / totals.clicks, 0) : 0,
     },
     timeseries,
     campaigns,
@@ -174,16 +213,20 @@ function mergeDatasets(sets: PlatformDataset[]): PlatformDataset {
   };
 }
 
-// accountIds: which ad accounts to combine. Defaults to the single main
-// account for backwards compatibility. Pass the caller's scoped list to
-// respect role-based access (Superadmin = all, Advertiser = assigned).
-export async function fetchMetaAdsData(accountIds: string[] = [DEFAULT_ACCOUNT]): Promise<PlatformDataset> {
+// accountIds: which ad accounts to combine (role-scoped by the caller).
+// range: Meta date_preset or a custom since/until pair.
+// clientFilter: when set, only campaigns resolved to this client are included.
+export async function fetchMetaAdsData(
+  accountIds: string[] = [DEFAULT_ACCOUNT],
+  range?: DateRange,
+  clientFilter?: string
+): Promise<PlatformDataset> {
   if (!TOKEN) {
     throw new Error("Meta Ads not connected — set META_ACCESS_TOKEN.");
   }
   if (accountIds.length === 0) {
     throw new Error("No ad accounts assigned to this user yet.");
   }
-  const sets = await Promise.all(accountIds.map(fetchForAccount));
+  const sets = await Promise.all(accountIds.map((id) => fetchForAccount(id, range, clientFilter)));
   return mergeDatasets(sets);
 }

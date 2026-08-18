@@ -9,7 +9,10 @@ import type {
 } from "./types";
 import { fetchMetaAdsData } from "./metaAds";
 import { fetchGoogleAdsData, GOOGLE_CONNECTED } from "./googleAds";
+import type { DateRange } from "./metaCampaigns";
 import { round } from "./mockUtils";
+
+export type Platform = "meta" | "google" | "both";
 
 function mergeKpis(a: KpiSummary, b: KpiSummary): KpiSummary {
   const totalSpend = a.totalSpend + b.totalSpend;
@@ -50,33 +53,50 @@ function mergeTimeseries(
   return Array.from(map.values()).sort((x, y) => x.date.localeCompare(y.date));
 }
 
-// Only combine Google when it's actually connected (real credentials present).
-// No mock data — if Google isn't connected, the dashboard is Meta-only.
-// `accountIds` scopes which Meta ad accounts are included (role-based access:
-// Superadmin sees all, Advertiser sees only their assigned accounts).
-export async function getUnifiedDashboardData(accountIds?: string[]): Promise<UnifiedDashboardData> {
-  const meta = await fetchMetaAdsData(accountIds);
-  const google = GOOGLE_CONNECTED ? await fetchGoogleAdsData() : null;
+interface DashboardOptions {
+  accountIds?: string[]; // Meta ad accounts to include (role-scoped)
+  range?: DateRange;
+  clientFilter?: string; // only campaigns resolved to this client
+  platform?: Platform; // "meta" | "google" | "both" (default "both")
+}
 
-  // --- Meta-only view (default) ---
-  if (!google) {
-    const sources = meta.campaigns
+// No mock data — Meta is skipped if platform === "google", Google is only
+// included when platform !== "meta" AND it's actually connected.
+export async function getUnifiedDashboardData(opts: DashboardOptions = {}): Promise<UnifiedDashboardData> {
+  const { accountIds, range, clientFilter, platform = "both" } = opts;
+
+  const wantMeta = platform !== "google";
+  const wantGoogle = platform !== "meta" && GOOGLE_CONNECTED;
+
+  const meta = wantMeta ? await fetchMetaAdsData(accountIds, range, clientFilter) : null;
+  const google = wantGoogle ? await fetchGoogleAdsData() : null;
+
+  if (!meta && !google) {
+    throw new Error(
+      platform === "google" ? "Google Ads not connected." : "Meta Ads not connected — set META_ACCESS_TOKEN."
+    );
+  }
+
+  // --- Single-platform view ---
+  if (!meta || !google) {
+    const only = meta ?? google!;
+    const sources = only.campaigns
       .slice()
       .sort((a, b) => b.spend - a.spend)
       .slice(0, 5)
-      .map((c) => ({ platform: "meta" as const, label: c.name, spend: c.spend }));
+      .map((c) => ({ platform: only.platform, label: c.name, spend: c.spend }));
 
-    const topCampaigns = meta.campaigns
+    const topCampaigns = only.campaigns
       .slice()
       .sort((a, b) => b.spend - a.spend)
       .slice(0, 6);
 
     return {
-      kpis: meta.kpis,
-      timeseries: meta.timeseries,
+      kpis: only.kpis,
+      timeseries: only.timeseries,
       sources,
       topCampaigns,
-      perPlatform: [meta],
+      perPlatform: [only],
       generatedAt: new Date().toISOString(),
     };
   }

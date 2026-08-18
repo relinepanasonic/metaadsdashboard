@@ -8,7 +8,7 @@ import { round } from "./mockUtils";
 import { db } from "../supabase/db";
 
 // Load manual campaign->client overrides from Supabase (if configured).
-async function loadClientOverrides(accountId: string): Promise<Map<string, string>> {
+export async function loadClientOverrides(accountId: string): Promise<Map<string, string>> {
   const map = new Map<string, string>();
   if (!db) return map;
   try {

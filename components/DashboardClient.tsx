@@ -1,17 +1,19 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Wallet,
-  Eye,
-  MousePointerClick,
   MessageCircle,
   Target,
   Percent,
   RefreshCw,
   Activity,
+  Layers,
+  Building2,
+  Wallet2,
+  UserRound,
 } from "lucide-react";
-import type { UnifiedDashboardData } from "@/lib/services/types";
+import type { UnifiedDashboardData, MetaAccount } from "@/lib/services/types";
 import { formatIDR, formatNumber, formatPct } from "@/lib/format";
 import KpiCard from "./KpiCard";
 import Panel from "./Panel";
@@ -19,17 +21,64 @@ import SpendRevenueChart from "./SpendRevenueChart";
 import SourcesDonut from "./SourcesDonut";
 import TopCampaignsBar from "./TopCampaignsBar";
 import ApiStatusFlow from "./ApiStatusFlow";
+import CustomSelect from "./CustomSelect";
+import DateRangePicker, { type DateRangeValue } from "./DateRangePicker";
+
+const ALL = "__all__";
+const ALL_ACCOUNTS = "__all_accounts__";
 
 export default function DashboardClient() {
   const [data, setData] = useState<UnifiedDashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Filters
+  const [accounts, setAccounts] = useState<MetaAccount[]>([]);
+  const [clients, setClients] = useState<string[]>([]);
+  const [platform, setPlatform] = useState<"both" | "meta" | "google">("both");
+  const [business, setBusiness] = useState<string>(ALL);
+  const [account, setAccount] = useState<string>(ALL_ACCOUNTS);
+  const [client, setClient] = useState<string>(ALL);
+  const [dateRange, setDateRange] = useState<DateRangeValue>({ preset: "last_30d" });
+
+  // Load filter option sources once.
+  useEffect(() => {
+    fetch("/api/meta/accounts", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => j.ok && setAccounts(j.accounts as MetaAccount[]))
+      .catch(() => {});
+    fetch("/api/clients", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => j.ok && setClients(j.clients as string[]))
+      .catch(() => {});
+  }, []);
+
+  const businesses = useMemo(() => {
+    const set = new Set(accounts.map((a) => a.business || "Other"));
+    return Array.from(set);
+  }, [accounts]);
+
+  const visibleAccounts = useMemo(
+    () => (business === ALL ? accounts : accounts.filter((a) => (a.business || "Other") === business)),
+    [accounts, business]
+  );
+
   async function load() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/dashboard", { cache: "no-store" });
+      const params = new URLSearchParams();
+      params.set("platform", platform);
+      if (account !== ALL_ACCOUNTS) params.set("accounts", account);
+      if (client !== ALL) params.set("client", client);
+      if (dateRange.since && dateRange.until) {
+        params.set("since", dateRange.since);
+        params.set("until", dateRange.until);
+      } else {
+        params.set("date_preset", dateRange.preset || "last_30d");
+      }
+
+      const res = await fetch(`/api/dashboard?${params.toString()}`, { cache: "no-store" });
       const json = await res.json();
       if (!json.ok) throw new Error(json.error || "Failed to load");
       setData(json.data as UnifiedDashboardData);
@@ -42,24 +91,20 @@ export default function DashboardClient() {
 
   useEffect(() => {
     load();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [platform, account, client, dateRange]);
 
   return (
     <div className="relative z-10 mx-auto max-w-[1400px] px-4 py-6 sm:px-6 lg:px-8">
       {/* Header */}
       <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="grid h-9 w-9 place-items-center rounded-lg" style={{ background: "rgba(59,130,246,0.12)", boxShadow: "0 0 0 1px rgba(59,130,246,0.4)" }}>
-              <Activity size={18} className="text-cyan-400" />
-            </span>
-            <h1 className="text-xl font-black tracking-tight text-white sm:text-2xl">
-              Unified Ads <span className="neon-text-cyan">Command Center</span>
-            </h1>
-          </div>
-          <p className="mt-1 text-xs text-slate-500">
-            Meta Ads · Prof Toko Online · Last 30 days
-          </p>
+        <div className="flex items-center gap-2">
+          <span className="grid h-9 w-9 place-items-center rounded-lg" style={{ background: "rgba(59,130,246,0.12)", boxShadow: "0 0 0 1px rgba(59,130,246,0.4)" }}>
+            <Activity size={18} className="text-cyan-400" />
+          </span>
+          <h1 className="text-xl font-black tracking-tight text-white sm:text-2xl">
+            Ads <span className="neon-text-cyan">Dashboard</span>
+          </h1>
         </div>
         <button
           onClick={load}
@@ -70,6 +115,54 @@ export default function DashboardClient() {
           {loading ? "Syncing…" : "Refresh"}
         </button>
       </header>
+
+      {/* Filters */}
+      <div className="glass-panel mb-6 flex flex-wrap items-center gap-3 p-3">
+        <div className="flex items-center gap-1.5">
+          <Layers size={14} className="text-slate-500 shrink-0" />
+          <CustomSelect
+            className="min-w-[150px]"
+            value={platform}
+            onChange={(v) => setPlatform(v as "both" | "meta" | "google")}
+            options={[
+              { value: "both", label: "Meta & Google", accent: true },
+              { value: "meta", label: "Meta Only" },
+              { value: "google", label: "Google Only" },
+            ]}
+          />
+        </div>
+        <div className="flex items-center gap-1.5">
+          <Building2 size={14} className="text-slate-500 shrink-0" />
+          <CustomSelect
+            className="min-w-[160px]"
+            value={business}
+            onChange={setBusiness}
+            options={[{ value: ALL, label: "All Businesses" }, ...businesses.map((b) => ({ value: b, label: b }))]}
+          />
+        </div>
+        <div className="flex items-center gap-1.5">
+          <Wallet2 size={14} className="text-slate-500 shrink-0" />
+          <CustomSelect
+            className="min-w-[170px]"
+            value={account}
+            onChange={setAccount}
+            options={[
+              { value: ALL_ACCOUNTS, label: "All Ad Accounts", accent: true },
+              ...visibleAccounts.map((a) => ({ value: a.id, label: a.name })),
+            ]}
+          />
+        </div>
+        <div className="flex items-center gap-1.5">
+          <UserRound size={14} className="text-slate-500 shrink-0" />
+          <CustomSelect
+            className="min-w-[150px]"
+            value={client}
+            onChange={setClient}
+            options={[{ value: ALL, label: "All Clients" }, ...clients.map((c) => ({ value: c, label: c }))]}
+          />
+        </div>
+        <DateRangePicker value={dateRange} onChange={setDateRange} />
+      </div>
 
       {error && (
         <div className="glass-panel mb-6 p-6" style={{ boxShadow: "inset 0 0 0 1px rgba(251,191,36,0.3)" }}>
@@ -128,7 +221,7 @@ export default function DashboardClient() {
 
       {/* Donut + Bar row */}
       <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <Panel title="Spend by Campaign" subtitle="Top Meta campaigns" bodyClassName="h-[320px]">
+        <Panel title="Spend by Campaign" subtitle="Top campaigns" bodyClassName="h-[320px]">
           {loading || !data ? <SkeletonBlock /> : <SourcesDonut data={data.sources} />}
         </Panel>
 
@@ -160,8 +253,7 @@ export default function DashboardClient() {
       </div>
 
       <footer className="mt-6 text-center text-[11px] text-slate-600">
-        {data ? `Data generated ${new Date(data.generatedAt).toLocaleString("id-ID")} · ` : ""}
-        Live data — Meta Graph API (act_1153490826516966)
+        {data ? `Data generated ${new Date(data.generatedAt).toLocaleString("id-ID")}` : ""}
       </footer>
     </div>
   );
