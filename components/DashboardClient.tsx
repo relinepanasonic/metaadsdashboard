@@ -128,7 +128,7 @@ export default function DashboardClient() {
 
       {/* Donut + Bar row */}
       <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <Panel title="Spend by Campaign" subtitle="Top Meta campaigns" bodyClassName="h-[280px]">
+        <Panel title="Spend by Campaign" subtitle="Top Meta campaigns" bodyClassName="h-[320px]">
           {loading || !data ? <SkeletonBlock /> : <SourcesDonut data={data.sources} />}
         </Panel>
 
@@ -136,7 +136,7 @@ export default function DashboardClient() {
           title="Top Performing Campaigns"
           subtitle="Ranked by spend"
           className="lg:col-span-2"
-          bodyClassName="h-[280px]"
+          bodyClassName="h-[320px]"
         >
           {loading || !data ? <SkeletonBlock /> : <TopCampaignsBar data={data.topCampaigns} />}
         </Panel>
