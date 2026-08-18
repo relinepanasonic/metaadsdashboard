@@ -9,7 +9,7 @@ const inputCls =
   "w-full rounded-lg border border-white/[0.12] bg-[#0b0e14] px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-600 focus:border-cyan-500/50 focus:outline-none";
 
 interface InviteInfo {
-  role: "advertiser" | "client";
+  role: "superadmin" | "advertiser" | "client";
   client_name: string | null;
   label: string | null;
 }
@@ -98,7 +98,8 @@ export default function InviteAcceptPage() {
     );
   }
 
-  const roleLabel = invite.role === "advertiser" ? "Advertiser" : `Client — ${invite.client_name}`;
+  const roleLabel =
+    invite.role === "superadmin" ? "Superadmin" : invite.role === "advertiser" ? "Advertiser" : `Client — ${invite.client_name}`;
 
   return (
     <AuthCard title="You're invited" subtitle={`Set up your ${roleLabel} account`}>

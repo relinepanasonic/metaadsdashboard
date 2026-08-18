@@ -27,8 +27,8 @@ export async function POST(req: NextRequest) {
 
   const { role, clientName, adAccountIds, label } = await req.json();
 
-  if (role === "advertiser" && me.role !== "superadmin") {
-    return NextResponse.json({ ok: false, error: "Only Superadmin can invite Advertisers." }, { status: 403 });
+  if ((role === "advertiser" || role === "superadmin") && me.role !== "superadmin") {
+    return NextResponse.json({ ok: false, error: "Only Superadmin can invite Advertisers or Superadmins." }, { status: 403 });
   }
   if (role === "client" && !clientName) {
     return NextResponse.json({ ok: false, error: "clientName is required for client invites." }, { status: 400 });

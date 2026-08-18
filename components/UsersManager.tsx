@@ -18,7 +18,7 @@ interface AppUserRow {
 }
 interface InviteRow {
   token: string;
-  role: "advertiser" | "client";
+  role: "superadmin" | "advertiser" | "client";
   client_name: string | null;
   ad_account_ids: string[] | null;
   label: string | null;
@@ -43,7 +43,7 @@ export default function UsersManager({ myRole }: { myRole: string }) {
   const [toast, setToast] = useState<string | null>(null);
 
   // New-invite form state
-  const [newRole, setNewRole] = useState<"advertiser" | "client">("client");
+  const [newRole, setNewRole] = useState<"superadmin" | "advertiser" | "client">("client");
   const [newClient, setNewClient] = useState("");
   const [newClientCustom, setNewClientCustom] = useState("");
   const [newAccounts, setNewAccounts] = useState<string[]>([]);
@@ -154,15 +154,18 @@ export default function UsersManager({ myRole }: { myRole: string }) {
             <CustomSelect
               className="min-w-[140px]"
               value={newRole}
-              onChange={(v) => setNewRole(v as "advertiser" | "client")}
+              onChange={(v) => setNewRole(v as "superadmin" | "advertiser" | "client")}
               options={[
                 { value: "client", label: "Client" },
                 ...(canInviteAdvertiser ? [{ value: "advertiser", label: "Advertiser" }] : []),
+                ...(canInviteAdvertiser ? [{ value: "superadmin", label: "Superadmin" }] : []),
               ]}
             />
           </div>
 
-          {newRole === "client" ? (
+          {newRole === "superadmin" ? (
+            <p className="pb-2 text-xs text-slate-500">Full access — no scope needed.</p>
+          ) : newRole === "client" ? (
             <div>
               <label className="mb-1.5 block text-[10px] uppercase tracking-wider text-slate-500">Client</label>
               <CustomSelect className="min-w-[160px]" value={newClient} onChange={setNewClient} placeholder="Choose client" options={clientOptions} />
@@ -200,7 +203,14 @@ export default function UsersManager({ myRole }: { myRole: string }) {
 
           <button
             onClick={createInvite}
-            disabled={creating || (newRole === "client" ? !(newClient === "__custom__" ? newClientCustom.trim() : newClient) : newAccounts.length === 0)}
+            disabled={
+              creating ||
+              (newRole === "client"
+                ? !(newClient === "__custom__" ? newClientCustom.trim() : newClient)
+                : newRole === "advertiser"
+                ? newAccounts.length === 0
+                : false)
+            }
             className="flex items-center gap-2 rounded-lg bg-cyan-500/15 px-4 py-2 text-xs font-semibold text-cyan-300 hover:bg-cyan-500/25 disabled:cursor-not-allowed disabled:opacity-40"
             style={{ boxShadow: "inset 0 0 0 1px rgba(34,211,238,0.4)" }}
           >
@@ -224,7 +234,7 @@ export default function UsersManager({ myRole }: { myRole: string }) {
                 <div key={inv.token} className="flex items-center gap-3 rounded-lg border border-white/[0.06] px-3 py-2.5">
                   <span className={`flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-semibold ${badge.cls}`}>
                     <Icon size={11} />
-                    {inv.role === "client" ? inv.client_name : "Advertiser"}
+                    {inv.role === "client" ? inv.client_name : inv.role === "advertiser" ? "Advertiser" : "Superadmin"}
                   </span>
                   <span className="text-xs text-slate-500">
                     {inv.status === "pending" && !expired && "Pending"}
