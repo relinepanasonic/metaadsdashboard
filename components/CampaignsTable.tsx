@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Search, RefreshCw, Building2, Wallet2, UserRound } from "lucide-react";
 import type { MetaAccount, CampaignTableRow } from "@/lib/services/types";
 import { formatIDR, formatNumber } from "@/lib/format";
+import CustomSelect from "./CustomSelect";
 
 const ALL = "__all__";
 
@@ -53,11 +54,6 @@ export default function CampaignsTable() {
   }
 
   async function handleClientChange(campaignId: string, value: string) {
-    if (value === "__new__") {
-      const name = window.prompt("New client name:")?.trim();
-      if (name) await assignClient(campaignId, name);
-      return;
-    }
     await assignClient(campaignId, value === "Unassigned" ? "" : value);
   }
 
@@ -107,38 +103,36 @@ export default function CampaignsTable() {
     );
   }, [filtered]);
 
-  const selectCls =
-    "bg-[#0b0e14] border border-white/[0.1] rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-cyan-500/50 min-w-[150px]";
-
   return (
     <div className="glass-panel p-4 sm:p-5">
       {/* Filters */}
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-1.5">
-          <Building2 size={14} className="text-slate-500" />
-          <select className={selectCls} value={business} onChange={(e) => setBusiness(e.target.value)}>
-            <option value={ALL}>All Businesses</option>
-            {businesses.map((b) => (
-              <option key={b} value={b}>{b}</option>
-            ))}
-          </select>
+          <Building2 size={14} className="text-slate-500 shrink-0" />
+          <CustomSelect
+            className="min-w-[160px]"
+            value={business}
+            onChange={setBusiness}
+            options={[{ value: ALL, label: "All Businesses" }, ...businesses.map((b) => ({ value: b, label: b }))]}
+          />
         </div>
         <div className="flex items-center gap-1.5">
-          <Wallet2 size={14} className="text-slate-500" />
-          <select className={selectCls} value={account} onChange={(e) => setAccount(e.target.value)}>
-            {visibleAccounts.map((a) => (
-              <option key={a.id} value={a.id}>{a.name}</option>
-            ))}
-          </select>
+          <Wallet2 size={14} className="text-slate-500 shrink-0" />
+          <CustomSelect
+            className="min-w-[170px]"
+            value={account}
+            onChange={setAccount}
+            options={visibleAccounts.map((a) => ({ value: a.id, label: a.name }))}
+          />
         </div>
         <div className="flex items-center gap-1.5">
-          <UserRound size={14} className="text-slate-500" />
-          <select className={selectCls} value={client} onChange={(e) => setClient(e.target.value)}>
-            <option value={ALL}>All Clients</option>
-            {clients.map((c) => (
-              <option key={c} value={c}>{c}</option>
-            ))}
-          </select>
+          <UserRound size={14} className="text-slate-500 shrink-0" />
+          <CustomSelect
+            className="min-w-[150px]"
+            value={client}
+            onChange={setClient}
+            options={[{ value: ALL, label: "All Clients" }, ...clients.map((c) => ({ value: c, label: c }))]}
+          />
         </div>
         <div className="relative ml-auto">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
@@ -184,22 +178,19 @@ export default function CampaignsTable() {
               filtered.map((r) => (
                 <tr key={r.id} className="border-t border-white/[0.05] hover:bg-white/[0.02]">
                   <td className="sticky left-0 bg-[#0b0e14] px-3 py-2.5">
-                    <select
-                      value={roster.includes(r.client) ? r.client : r.client === "Unassigned" ? "Unassigned" : r.client}
-                      onChange={(e) => handleClientChange(r.id, e.target.value)}
-                      className={`rounded-md border border-transparent bg-white/[0.04] px-2 py-1 text-[11px] font-semibold hover:border-white/[0.15] focus:border-cyan-500/50 focus:outline-none ${
-                        r.client === "Unassigned" ? "text-slate-400" : "text-cyan-300"
-                      }`}
-                    >
-                      <option value="Unassigned">Unassigned</option>
-                      {!roster.includes(r.client) && r.client !== "Unassigned" && (
-                        <option value={r.client}>{r.client}</option>
-                      )}
-                      {roster.map((c) => (
-                        <option key={c} value={c}>{c}</option>
-                      ))}
-                      <option value="__new__">＋ Add new…</option>
-                    </select>
+                    <CustomSelect
+                      size="sm"
+                      className="min-w-[140px]"
+                      value={r.client}
+                      onChange={(v) => handleClientChange(r.id, v)}
+                      allowAddNew
+                      onAddNew={(name) => assignClient(r.id, name)}
+                      options={[
+                        { value: "Unassigned", label: "Unassigned" },
+                        ...(!roster.includes(r.client) && r.client !== "Unassigned" ? [{ value: r.client, label: r.client, accent: true }] : []),
+                        ...roster.map((c) => ({ value: c, label: c, accent: c === r.client })),
+                      ]}
+                    />
                   </td>
                   <td className="max-w-[240px] truncate px-3 py-2.5 font-medium text-slate-100" title={r.name}>{r.name}</td>
                   <td className="px-3 py-2.5">
