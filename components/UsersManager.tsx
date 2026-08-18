@@ -2,10 +2,17 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
-  UserPlus, Copy, Ban, RotateCcw, KeyRound, Check, Loader2, ShieldCheck, Megaphone, UserRound as ClientIcon,
+  UserPlus, Copy, Ban, RotateCcw, KeyRound, Check, Loader2, ShieldCheck, Megaphone,
+  UserRound as ClientIcon, Building2, Mail,
 } from "lucide-react";
 import CustomSelect from "./CustomSelect";
 import type { MetaAccount } from "@/lib/services/types";
+
+interface ClientDetail {
+  name: string;
+  pic: string | null;
+  contact_email: string | null;
+}
 
 interface AppUserRow {
   id: string;
@@ -38,9 +45,17 @@ export default function UsersManager({ myRole }: { myRole: string }) {
   const [invites, setInvites] = useState<InviteRow[]>([]);
   const [accounts, setAccounts] = useState<MetaAccount[]>([]);
   const [clients, setClients] = useState<string[]>([]);
+  const [clientDetails, setClientDetails] = useState<ClientDetail[]>([]);
   const [loading, setLoading] = useState(true);
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+
+  // New-client form state
+  const [brand, setBrand] = useState("");
+  const [pic, setPic] = useState("");
+  const [clientEmail, setClientEmail] = useState("");
+  const [savingClient, setSavingClient] = useState(false);
+  const [clientError, setClientError] = useState<string | null>(null);
 
   // New-invite form state
   const [newRole, setNewRole] = useState<"superadmin" | "advertiser" | "client">("client");
@@ -61,8 +76,34 @@ export default function UsersManager({ myRole }: { myRole: string }) {
     if (u.ok) setUsers(u.users);
     if (i.ok) setInvites(i.invites);
     if (a.ok) setAccounts(a.accounts);
-    if (c.ok) setClients(c.clients);
+    if (c.ok) {
+      setClients(c.clients);
+      setClientDetails(c.details ?? []);
+    }
     setLoading(false);
+  }
+
+  async function createClient() {
+    setSavingClient(true);
+    setClientError(null);
+    try {
+      const res = await fetch("/api/clients", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: brand.trim(), pic: pic.trim(), email: clientEmail.trim() }),
+      });
+      const json = await res.json();
+      if (!json.ok) throw new Error(json.error);
+      flash(`Client "${brand.trim()}" saved.`);
+      setBrand("");
+      setPic("");
+      setClientEmail("");
+      loadAll();
+    } catch (e) {
+      setClientError((e as Error).message);
+    } finally {
+      setSavingClient(false);
+    }
   }
 
   useEffect(() => {
@@ -144,6 +185,67 @@ export default function UsersManager({ myRole }: { myRole: string }) {
           {toast}
         </div>
       )}
+
+      {/* New client */}
+      <div className="glass-panel p-5">
+        <h3 className="mb-4 text-sm font-semibold text-slate-200">New client</h3>
+        <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <label className="mb-1.5 flex items-center gap-1 text-[10px] uppercase tracking-wider text-slate-500">
+              <Building2 size={11} /> Brand
+            </label>
+            <input
+              value={brand}
+              onChange={(e) => setBrand(e.target.value)}
+              placeholder="e.g. Proone"
+              className="w-[180px] rounded-lg border border-white/[0.12] bg-[#0b0e14] px-3 py-2 text-xs text-slate-100 placeholder:text-slate-600 focus:border-cyan-500/50 focus:outline-none"
+            />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-[10px] uppercase tracking-wider text-slate-500">PIC</label>
+            <input
+              value={pic}
+              onChange={(e) => setPic(e.target.value)}
+              placeholder="Person in charge"
+              className="w-[180px] rounded-lg border border-white/[0.12] bg-[#0b0e14] px-3 py-2 text-xs text-slate-100 placeholder:text-slate-600 focus:border-cyan-500/50 focus:outline-none"
+            />
+          </div>
+          <div>
+            <label className="mb-1.5 flex items-center gap-1 text-[10px] uppercase tracking-wider text-slate-500">
+              <Mail size={11} /> Email <span className="normal-case text-slate-600">(optional)</span>
+            </label>
+            <input
+              type="email"
+              value={clientEmail}
+              onChange={(e) => setClientEmail(e.target.value)}
+              placeholder="contact@brand.com"
+              className="w-[200px] rounded-lg border border-white/[0.12] bg-[#0b0e14] px-3 py-2 text-xs text-slate-100 placeholder:text-slate-600 focus:border-cyan-500/50 focus:outline-none"
+            />
+          </div>
+          <button
+            onClick={createClient}
+            disabled={savingClient || !brand.trim()}
+            className="flex items-center gap-2 rounded-lg bg-cyan-500/15 px-4 py-2 text-xs font-semibold text-cyan-300 hover:bg-cyan-500/25 disabled:cursor-not-allowed disabled:opacity-40"
+            style={{ boxShadow: "inset 0 0 0 1px rgba(34,211,238,0.4)" }}
+          >
+            {savingClient ? <Loader2 size={13} className="animate-spin" /> : <Building2 size={13} />}
+            Save Client
+          </button>
+        </div>
+        {clientError && <p className="mt-2 text-xs text-rose-400">{clientError}</p>}
+
+        {clientDetails.length > 0 && (
+          <div className="mt-4 flex flex-col gap-1.5 border-t border-white/[0.06] pt-4">
+            {clientDetails.map((c) => (
+              <div key={c.name} className="flex items-center gap-3 rounded-lg border border-white/[0.06] px-3 py-2 text-xs">
+                <span className="rounded-md bg-emerald-500/15 px-2 py-0.5 font-semibold text-emerald-300">{c.name}</span>
+                <span className="text-slate-400">{c.pic || "—"}</span>
+                <span className="ml-auto text-slate-500">{c.contact_email || "—"}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* Create invite */}
       <div className="glass-panel p-5">
