@@ -15,8 +15,12 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "You don't have access to this ad account." }, { status: 403 });
   }
 
+  const since = req.nextUrl.searchParams.get("since") ?? undefined;
+  const until = req.nextUrl.searchParams.get("until") ?? undefined;
+  const preset = req.nextUrl.searchParams.get("date_preset") ?? undefined;
+
   try {
-    const campaigns = await fetchMetaCampaigns(account);
+    const campaigns = await fetchMetaCampaigns(account, { since, until, preset });
     return NextResponse.json({ ok: true, campaigns });
   } catch (err) {
     return NextResponse.json({ ok: false, error: (err as Error).message }, { status: 500 });

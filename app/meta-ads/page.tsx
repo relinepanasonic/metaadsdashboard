@@ -12,7 +12,7 @@ export default async function MetaAdsPage() {
     <PagePlaceholder
       icon={Share2}
       title="Meta Ads — Campaigns"
-      subtitle="Filter by Business, Ad Account, and Client · Last 30 days"
+      subtitle="Filter by Business, Ad Account, Client, and Date Range"
     >
       <CampaignsTable />
     </PagePlaceholder>

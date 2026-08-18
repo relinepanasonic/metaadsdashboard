@@ -5,6 +5,7 @@ import { Search, RefreshCw, Building2, Wallet2, UserRound } from "lucide-react";
 import type { MetaAccount, CampaignTableRow } from "@/lib/services/types";
 import { formatIDR, formatNumber } from "@/lib/format";
 import CustomSelect from "./CustomSelect";
+import DateRangePicker, { type DateRangeValue } from "./DateRangePicker";
 
 const ALL = "__all__";
 const ALL_ACCOUNTS = "__all_accounts__";
@@ -24,13 +25,18 @@ export default function CampaignsTable({ mode = "admin" }: CampaignsTableProps) 
   const [roster, setRoster] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [dateRange, setDateRange] = useState<DateRangeValue>({ preset: "last_30d" });
+
+  const dateQuery = dateRange.since && dateRange.until
+    ? `since=${dateRange.since}&until=${dateRange.until}`
+    : `date_preset=${dateRange.preset || "last_30d"}`;
 
   // Client mode: fetch the caller's own campaigns directly, no account picker.
   useEffect(() => {
     if (!isClientMode) return;
     setLoading(true);
     setError(null);
-    fetch("/api/meta/my-campaigns", { cache: "no-store" })
+    fetch(`/api/meta/my-campaigns?${dateQuery}`, { cache: "no-store" })
       .then((r) => r.json())
       .then((json) => {
         if (!json.ok) throw new Error(json.error);
@@ -38,7 +44,7 @@ export default function CampaignsTable({ mode = "admin" }: CampaignsTableProps) 
       })
       .catch((e) => setError((e as Error).message))
       .finally(() => setLoading(false));
-  }, [isClientMode]);
+  }, [isClientMode, dateQuery]);
 
   // Admin mode: load accounts + client roster once.
   useEffect(() => {
@@ -107,7 +113,7 @@ export default function CampaignsTable({ mode = "admin" }: CampaignsTableProps) 
 
     Promise.all(
       targets.map((id) =>
-        fetch(`/api/meta/campaigns?account=${id}`, { cache: "no-store" })
+        fetch(`/api/meta/campaigns?account=${id}&${dateQuery}`, { cache: "no-store" })
           .then((r) => r.json())
           .then((json) => (json.ok ? (json.campaigns as CampaignTableRow[]) : []))
           .catch(() => [] as CampaignTableRow[])
@@ -116,7 +122,7 @@ export default function CampaignsTable({ mode = "admin" }: CampaignsTableProps) 
       .then((results) => setRows(results.flat()))
       .catch((e) => setError((e as Error).message))
       .finally(() => setLoading(false));
-  }, [account, isClientMode, visibleAccountIds]);
+  }, [account, isClientMode, visibleAccountIds, dateQuery]);
 
   const clients = useMemo(() => {
     const set = new Set(rows.map((r) => r.client));
@@ -180,6 +186,7 @@ export default function CampaignsTable({ mode = "admin" }: CampaignsTableProps) 
             </div>
           </>
         )}
+        <DateRangePicker value={dateRange} onChange={setDateRange} />
         <div className="relative ml-auto">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
           <input

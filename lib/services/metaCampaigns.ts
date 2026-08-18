@@ -145,7 +145,20 @@ interface InsightObj {
   actions?: MetaAction[];
 }
 
-export async function fetchMetaCampaigns(accountId: string): Promise<CampaignTableRow[]> {
+export interface DateRange {
+  preset?: string; // Meta date_preset, e.g. "last_30d", "maximum"
+  since?: string; // YYYY-MM-DD, used with `until` for a custom range
+  until?: string;
+}
+
+function dateParams(range?: DateRange): Record<string, string> {
+  if (range?.since && range?.until) {
+    return { time_range: JSON.stringify({ since: range.since, until: range.until }) };
+  }
+  return { date_preset: range?.preset || "last_30d" };
+}
+
+export async function fetchMetaCampaigns(accountId: string, range?: DateRange): Promise<CampaignTableRow[]> {
   if (!TOKEN) throw new Error("Meta Ads not connected — set META_ACCESS_TOKEN.");
 
   const [campaignsRes, insightsRes, overrides] = await Promise.all([
@@ -156,8 +169,8 @@ export async function fetchMetaCampaigns(accountId: string): Promise<CampaignTab
     graph<{ data: InsightObj[] }>(`act_${accountId}/insights`, {
       fields: "campaign_id,spend,impressions,reach,actions",
       level: "campaign",
-      date_preset: "last_30d",
       limit: "200",
+      ...dateParams(range),
     }),
     loadClientOverrides(accountId),
   ]);
@@ -194,9 +207,9 @@ export async function fetchMetaCampaigns(accountId: string): Promise<CampaignTab
 // For the Client role: campaigns matching their client name, across every
 // ad account the token can read (a client's campaigns may live in more than
 // one account).
-export async function fetchCampaignsForClient(clientName: string): Promise<CampaignTableRow[]> {
+export async function fetchCampaignsForClient(clientName: string, range?: DateRange): Promise<CampaignTableRow[]> {
   const results = await Promise.all(
-    ACCOUNT_IDS.map((id) => fetchMetaCampaigns(id).catch(() => [] as CampaignTableRow[]))
+    ACCOUNT_IDS.map((id) => fetchMetaCampaigns(id, range).catch(() => [] as CampaignTableRow[]))
   );
   return results.flat().filter((c) => c.client === clientName);
 }
