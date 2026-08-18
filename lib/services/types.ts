@@ -69,6 +69,7 @@ export interface CampaignTableRow {
   spend: number;
   impressions: number;
   reach: number;
+  accountId?: string;
 }
 
 // The unified payload the dashboard consumes.

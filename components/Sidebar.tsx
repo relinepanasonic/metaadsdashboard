@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
   Share2,
@@ -13,7 +13,10 @@ import {
   ChevronLeft,
   Activity,
   Plug,
+  UserCog,
+  LogOut,
 } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
 
 interface NavItem {
   label: string;
@@ -22,22 +25,61 @@ interface NavItem {
   badge?: string;
 }
 
-const NAV: NavItem[] = [
-  { label: "Overview", href: "/", icon: LayoutDashboard },
-  { label: "Meta Ads", href: "/meta-ads", icon: Share2, badge: "Live" },
-  { label: "Google Ads", href: "/google-ads", icon: Globe, badge: "Soon" },
-  { label: "Campaigns", href: "/campaigns", icon: Megaphone },
-  { label: "Leads", href: "/leads", icon: Users },
-];
+interface Me {
+  username: string;
+  role: "superadmin" | "advertiser" | "client";
+}
 
-const BOTTOM_NAV: NavItem[] = [
-  { label: "Connections", href: "/connections", icon: Plug },
-  { label: "Settings", href: "/settings", icon: Settings },
-];
+const ROLE_LABEL: Record<string, string> = {
+  superadmin: "Superadmin",
+  advertiser: "Advertiser",
+  client: "Client",
+};
+
+function navFor(role: Me["role"]): { main: NavItem[]; bottom: NavItem[] } {
+  if (role === "client") {
+    return {
+      main: [{ label: "My Campaigns", href: "/", icon: LayoutDashboard }],
+      bottom: [{ label: "Settings", href: "/settings", icon: Settings }],
+    };
+  }
+
+  const main: NavItem[] = [
+    { label: "Overview", href: "/", icon: LayoutDashboard },
+    { label: "Meta Ads", href: "/meta-ads", icon: Share2, badge: "Live" },
+    { label: "Google Ads", href: "/google-ads", icon: Globe, badge: "Soon" },
+    { label: "Campaigns", href: "/campaigns", icon: Megaphone },
+    { label: "Leads", href: "/leads", icon: Users },
+  ];
+  const bottom: NavItem[] = [
+    { label: "Users", href: "/users", icon: UserCog },
+    { label: "Connections", href: "/connections", icon: Plug },
+    { label: "Settings", href: "/settings", icon: Settings },
+  ];
+  return { main, bottom };
+}
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
+  const [me, setMe] = useState<Me | null>(null);
+
+  useEffect(() => {
+    fetch("/api/me")
+      .then((r) => r.json())
+      .then((j) => j.ok && setMe(j.user))
+      .catch(() => {});
+  }, []);
+
+  async function handleLogout() {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.push("/login");
+    router.refresh();
+  }
+
+  const { main, bottom } = navFor(me?.role ?? "advertiser");
 
   const renderItem = (item: NavItem) => {
     const active = pathname === item.href;
@@ -110,7 +152,7 @@ export default function Sidebar() {
             Analytics
           </span>
         )}
-        {NAV.map(renderItem)}
+        {main.map(renderItem)}
 
         <div className="mt-auto flex flex-col gap-1 pt-4">
           {!collapsed && (
@@ -118,9 +160,29 @@ export default function Sidebar() {
               System
             </span>
           )}
-          {BOTTOM_NAV.map(renderItem)}
+          {bottom.map(renderItem)}
         </div>
       </nav>
+
+      {/* Current user + logout */}
+      {me && (
+        <div className="border-t border-white/[0.06] px-3 py-3">
+          {!collapsed && (
+            <div className="mb-2 px-1">
+              <div className="truncate text-xs font-semibold text-slate-200">{me.username}</div>
+              <div className="text-[10px] text-slate-500">{ROLE_LABEL[me.role]}</div>
+            </div>
+          )}
+          <button
+            onClick={handleLogout}
+            title={collapsed ? "Log out" : undefined}
+            className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-slate-500 hover:bg-rose-500/10 hover:text-rose-300"
+          >
+            <LogOut size={14} />
+            {!collapsed && <span>Log out</span>}
+          </button>
+        </div>
+      )}
 
       {/* Collapse toggle */}
       <button

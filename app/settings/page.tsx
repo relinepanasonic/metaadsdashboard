@@ -1,12 +1,11 @@
 import { Settings } from "lucide-react";
 import PagePlaceholder from "@/components/PagePlaceholder";
+import ChangePasswordForm from "@/components/ChangePasswordForm";
 
 export default function SettingsPage() {
   return (
-    <PagePlaceholder icon={Settings} title="Settings" subtitle="App configuration">
-      <div className="glass-panel p-6 text-sm text-slate-400">
-        Currency, date range defaults, and account preferences will live here.
-      </div>
+    <PagePlaceholder icon={Settings} title="Settings" subtitle="Account & app configuration">
+      <ChangePasswordForm />
     </PagePlaceholder>
   );
 }

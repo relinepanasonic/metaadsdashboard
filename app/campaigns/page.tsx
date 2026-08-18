@@ -1,7 +1,12 @@
 import { Megaphone } from "lucide-react";
+import { redirect } from "next/navigation";
 import PagePlaceholder from "@/components/PagePlaceholder";
+import { getCurrentUser } from "@/lib/auth/currentUser";
 
-export default function CampaignsPage() {
+export default async function CampaignsPage() {
+  const me = await getCurrentUser();
+  if (me?.role === "client") redirect("/");
+
   return (
     <PagePlaceholder
       icon={Megaphone}

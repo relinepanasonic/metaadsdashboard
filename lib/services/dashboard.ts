@@ -52,8 +52,10 @@ function mergeTimeseries(
 
 // Only combine Google when it's actually connected (real credentials present).
 // No mock data — if Google isn't connected, the dashboard is Meta-only.
-export async function getUnifiedDashboardData(): Promise<UnifiedDashboardData> {
-  const meta = await fetchMetaAdsData();
+// `accountIds` scopes which Meta ad accounts are included (role-based access:
+// Superadmin sees all, Advertiser sees only their assigned accounts).
+export async function getUnifiedDashboardData(accountIds?: string[]): Promise<UnifiedDashboardData> {
+  const meta = await fetchMetaAdsData(accountIds);
   const google = GOOGLE_CONNECTED ? await fetchGoogleAdsData() : null;
 
   // --- Meta-only view (default) ---

@@ -28,7 +28,7 @@ const VERSION = process.env.META_API_VERSION || "v21.0";
 const BASE = `https://graph.facebook.com/${VERSION}`;
 
 // Ad accounts this token can read. Add ids here as more are granted access.
-const ACCOUNT_IDS = (process.env.META_AD_ACCOUNT_IDS ||
+export const ACCOUNT_IDS = (process.env.META_AD_ACCOUNT_IDS ||
   "1153490826516966,1577569293165066,1228774344982974,1330160865464929")
   .split(",")
   .map((s) => s.trim())
@@ -186,6 +186,17 @@ export async function fetchMetaCampaigns(accountId: string): Promise<CampaignTab
       spend,
       impressions: Number(m?.impressions) || 0,
       reach: Number(m?.reach) || 0,
+      accountId,
     };
   });
+}
+
+// For the Client role: campaigns matching their client name, across every
+// ad account the token can read (a client's campaigns may live in more than
+// one account).
+export async function fetchCampaignsForClient(clientName: string): Promise<CampaignTableRow[]> {
+  const results = await Promise.all(
+    ACCOUNT_IDS.map((id) => fetchMetaCampaigns(id).catch(() => [] as CampaignTableRow[]))
+  );
+  return results.flat().filter((c) => c.client === clientName);
 }

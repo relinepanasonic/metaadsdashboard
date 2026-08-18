@@ -8,7 +8,12 @@ import CustomSelect from "./CustomSelect";
 
 const ALL = "__all__";
 
-export default function CampaignsTable() {
+interface CampaignsTableProps {
+  mode?: "admin" | "client";
+}
+
+export default function CampaignsTable({ mode = "admin" }: CampaignsTableProps) {
+  const isClientMode = mode === "client";
   const [accounts, setAccounts] = useState<MetaAccount[]>([]);
   const [account, setAccount] = useState<string>("");
   const [business, setBusiness] = useState<string>(ALL);
@@ -19,8 +24,24 @@ export default function CampaignsTable() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Load accounts + client roster once.
+  // Client mode: fetch the caller's own campaigns directly, no account picker.
   useEffect(() => {
+    if (!isClientMode) return;
+    setLoading(true);
+    setError(null);
+    fetch("/api/meta/my-campaigns", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((json) => {
+        if (!json.ok) throw new Error(json.error);
+        setRows(json.campaigns as CampaignTableRow[]);
+      })
+      .catch((e) => setError((e as Error).message))
+      .finally(() => setLoading(false));
+  }, [isClientMode]);
+
+  // Admin mode: load accounts + client roster once.
+  useEffect(() => {
+    if (isClientMode) return;
     (async () => {
       try {
         const res = await fetch("/api/meta/accounts", { cache: "no-store" });
@@ -36,7 +57,7 @@ export default function CampaignsTable() {
       .then((r) => r.json())
       .then((j) => j.ok && setRoster(j.clients as string[]))
       .catch(() => {});
-  }, []);
+  }, [isClientMode]);
 
   // Assign a campaign to a client (optimistic + persist to Supabase).
   async function assignClient(campaignId: string, clientName: string) {
@@ -57,9 +78,9 @@ export default function CampaignsTable() {
     await assignClient(campaignId, value === "Unassigned" ? "" : value);
   }
 
-  // Load campaigns when account changes.
+  // Admin mode: load campaigns when the selected account changes.
   useEffect(() => {
-    if (!account) return;
+    if (isClientMode || !account) return;
     setLoading(true);
     setError(null);
     fetch(`/api/meta/campaigns?account=${account}`, { cache: "no-store" })
@@ -70,7 +91,7 @@ export default function CampaignsTable() {
       })
       .catch((e) => setError((e as Error).message))
       .finally(() => setLoading(false));
-  }, [account]);
+  }, [account, isClientMode]);
 
   const businesses = useMemo(() => {
     const set = new Set(accounts.map((a) => a.business || "Other"));
@@ -105,41 +126,45 @@ export default function CampaignsTable() {
 
   return (
     <div className="glass-panel p-4 sm:p-5">
-      {/* Filters */}
+      {/* Filters (admin mode only) */}
       <div className="mb-4 flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-1.5">
-          <Building2 size={14} className="text-slate-500 shrink-0" />
-          <CustomSelect
-            className="min-w-[160px]"
-            value={business}
-            onChange={setBusiness}
-            options={[{ value: ALL, label: "All Businesses" }, ...businesses.map((b) => ({ value: b, label: b }))]}
-          />
-        </div>
-        <div className="flex items-center gap-1.5">
-          <Wallet2 size={14} className="text-slate-500 shrink-0" />
-          <CustomSelect
-            className="min-w-[170px]"
-            value={account}
-            onChange={setAccount}
-            options={visibleAccounts.map((a) => ({ value: a.id, label: a.name }))}
-          />
-        </div>
-        <div className="flex items-center gap-1.5">
-          <UserRound size={14} className="text-slate-500 shrink-0" />
-          <CustomSelect
-            className="min-w-[150px]"
-            value={client}
-            onChange={setClient}
-            options={[{ value: ALL, label: "All Clients" }, ...clients.map((c) => ({ value: c, label: c }))]}
-          />
-        </div>
+        {!isClientMode && (
+          <>
+            <div className="flex items-center gap-1.5">
+              <Building2 size={14} className="text-slate-500 shrink-0" />
+              <CustomSelect
+                className="min-w-[160px]"
+                value={business}
+                onChange={setBusiness}
+                options={[{ value: ALL, label: "All Businesses" }, ...businesses.map((b) => ({ value: b, label: b }))]}
+              />
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Wallet2 size={14} className="text-slate-500 shrink-0" />
+              <CustomSelect
+                className="min-w-[170px]"
+                value={account}
+                onChange={setAccount}
+                options={visibleAccounts.map((a) => ({ value: a.id, label: a.name }))}
+              />
+            </div>
+            <div className="flex items-center gap-1.5">
+              <UserRound size={14} className="text-slate-500 shrink-0" />
+              <CustomSelect
+                className="min-w-[150px]"
+                value={client}
+                onChange={setClient}
+                options={[{ value: ALL, label: "All Clients" }, ...clients.map((c) => ({ value: c, label: c }))]}
+              />
+            </div>
+          </>
+        )}
         <div className="relative ml-auto">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search campaign or client…"
+            placeholder="Search campaign…"
             className="w-[220px] rounded-lg border border-white/[0.1] bg-[#0b0e14] py-2 pl-9 pr-3 text-xs text-slate-200 focus:border-cyan-500/50 focus:outline-none"
           />
         </div>
@@ -178,19 +203,23 @@ export default function CampaignsTable() {
               filtered.map((r) => (
                 <tr key={r.id} className="border-t border-white/[0.05] hover:bg-white/[0.02]">
                   <td className="sticky left-0 bg-[#0b0e14] px-3 py-2.5">
-                    <CustomSelect
-                      size="sm"
-                      className="min-w-[140px]"
-                      value={r.client}
-                      onChange={(v) => handleClientChange(r.id, v)}
-                      allowAddNew
-                      onAddNew={(name) => assignClient(r.id, name)}
-                      options={[
-                        { value: "Unassigned", label: "Unassigned" },
-                        ...(!roster.includes(r.client) && r.client !== "Unassigned" ? [{ value: r.client, label: r.client, accent: true }] : []),
-                        ...roster.map((c) => ({ value: c, label: c, accent: c === r.client })),
-                      ]}
-                    />
+                    {isClientMode ? (
+                      <span className="rounded-md bg-cyan-500/15 px-2 py-1 text-[11px] font-semibold text-cyan-300">{r.client}</span>
+                    ) : (
+                      <CustomSelect
+                        size="sm"
+                        className="min-w-[140px]"
+                        value={r.client}
+                        onChange={(v) => handleClientChange(r.id, v)}
+                        allowAddNew
+                        onAddNew={(name) => assignClient(r.id, name)}
+                        options={[
+                          { value: "Unassigned", label: "Unassigned" },
+                          ...(!roster.includes(r.client) && r.client !== "Unassigned" ? [{ value: r.client, label: r.client, accent: true }] : []),
+                          ...roster.map((c) => ({ value: c, label: c, accent: c === r.client })),
+                        ]}
+                      />
+                    )}
                   </td>
                   <td className="max-w-[240px] truncate px-3 py-2.5 font-medium text-slate-100" title={r.name}>{r.name}</td>
                   <td className="px-3 py-2.5">
