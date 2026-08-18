@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   UserPlus, Copy, Ban, RotateCcw, KeyRound, Check, Loader2, ShieldCheck, Megaphone,
-  UserRound as ClientIcon, Building2, Mail,
+  UserRound as ClientIcon, Building2, Mail, Pencil, Trash2, X,
 } from "lucide-react";
 import CustomSelect from "./CustomSelect";
 import type { MetaAccount } from "@/lib/services/types";
@@ -50,12 +50,14 @@ export default function UsersManager({ myRole }: { myRole: string }) {
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
-  // New-client form state
+  // New/edit-client form state
   const [brand, setBrand] = useState("");
   const [pic, setPic] = useState("");
   const [clientEmail, setClientEmail] = useState("");
+  const [editingOriginalName, setEditingOriginalName] = useState<string | null>(null);
   const [savingClient, setSavingClient] = useState(false);
   const [clientError, setClientError] = useState<string | null>(null);
+  const [deletingClient, setDeletingClient] = useState<string | null>(null);
 
   // New-invite form state
   const [newRole, setNewRole] = useState<"superadmin" | "advertiser" | "client">("client");
@@ -87,22 +89,53 @@ export default function UsersManager({ myRole }: { myRole: string }) {
     setSavingClient(true);
     setClientError(null);
     try {
+      const isEdit = Boolean(editingOriginalName);
       const res = await fetch("/api/clients", {
-        method: "POST",
+        method: isEdit ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: brand.trim(), pic: pic.trim(), email: clientEmail.trim() }),
+        body: JSON.stringify(
+          isEdit
+            ? { originalName: editingOriginalName, name: brand.trim(), pic: pic.trim(), email: clientEmail.trim() }
+            : { name: brand.trim(), pic: pic.trim(), email: clientEmail.trim() }
+        ),
       });
       const json = await res.json();
       if (!json.ok) throw new Error(json.error);
-      flash(`Client "${brand.trim()}" saved.`);
-      setBrand("");
-      setPic("");
-      setClientEmail("");
+      flash(isEdit ? `Client "${brand.trim()}" updated.` : `Client "${brand.trim()}" saved.`);
+      cancelEdit();
       loadAll();
     } catch (e) {
       setClientError((e as Error).message);
     } finally {
       setSavingClient(false);
+    }
+  }
+
+  function startEdit(c: ClientDetail) {
+    setEditingOriginalName(c.name);
+    setBrand(c.name);
+    setPic(c.pic ?? "");
+    setClientEmail(c.contact_email ?? "");
+    setClientError(null);
+  }
+
+  function cancelEdit() {
+    setEditingOriginalName(null);
+    setBrand("");
+    setPic("");
+    setClientEmail("");
+  }
+
+  async function deleteClient(name: string) {
+    if (!window.confirm(`Delete client "${name}"? Campaigns assigned to it will fall back to Unassigned.`)) return;
+    setDeletingClient(name);
+    try {
+      await fetch(`/api/clients?name=${encodeURIComponent(name)}`, { method: "DELETE" });
+      flash(`Client "${name}" deleted.`);
+      if (editingOriginalName === name) cancelEdit();
+      loadAll();
+    } finally {
+      setDeletingClient(null);
     }
   }
 
@@ -188,7 +221,14 @@ export default function UsersManager({ myRole }: { myRole: string }) {
 
       {/* New client */}
       <div className="glass-panel p-5">
-        <h3 className="mb-4 text-sm font-semibold text-slate-200">New client</h3>
+        <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-200">
+          {editingOriginalName ? `Editing "${editingOriginalName}"` : "New client"}
+          {editingOriginalName && (
+            <button onClick={cancelEdit} className="flex items-center gap-1 rounded-md bg-white/[0.05] px-2 py-0.5 text-[10px] font-medium text-slate-400 hover:bg-white/[0.1]">
+              <X size={10} /> Cancel
+            </button>
+          )}
+        </h3>
         <div className="flex flex-wrap items-end gap-3">
           <div>
             <label className="mb-1.5 flex items-center gap-1 text-[10px] uppercase tracking-wider text-slate-500">
@@ -229,7 +269,7 @@ export default function UsersManager({ myRole }: { myRole: string }) {
             style={{ boxShadow: "inset 0 0 0 1px rgba(34,211,238,0.4)" }}
           >
             {savingClient ? <Loader2 size={13} className="animate-spin" /> : <Building2 size={13} />}
-            Save Client
+            {editingOriginalName ? "Update Client" : "Save Client"}
           </button>
         </div>
         {clientError && <p className="mt-2 text-xs text-rose-400">{clientError}</p>}
@@ -241,6 +281,17 @@ export default function UsersManager({ myRole }: { myRole: string }) {
                 <span className="rounded-md bg-emerald-500/15 px-2 py-0.5 font-semibold text-emerald-300">{c.name}</span>
                 <span className="text-slate-400">{c.pic || "—"}</span>
                 <span className="ml-auto text-slate-500">{c.contact_email || "—"}</span>
+                <button onClick={() => startEdit(c)} className="flex items-center gap-1 rounded-md bg-white/[0.05] px-2 py-1 text-[11px] text-slate-300 hover:bg-white/[0.1]">
+                  <Pencil size={11} /> Edit
+                </button>
+                <button
+                  onClick={() => deleteClient(c.name)}
+                  disabled={deletingClient === c.name}
+                  className="flex items-center gap-1 rounded-md bg-rose-500/10 px-2 py-1 text-[11px] text-rose-300 hover:bg-rose-500/20 disabled:opacity-50"
+                >
+                  {deletingClient === c.name ? <Loader2 size={11} className="animate-spin" /> : <Trash2 size={11} />}
+                  Delete
+                </button>
               </div>
             ))}
           </div>

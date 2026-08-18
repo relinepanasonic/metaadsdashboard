@@ -7,6 +7,7 @@ import { formatIDR, formatNumber } from "@/lib/format";
 import CustomSelect from "./CustomSelect";
 
 const ALL = "__all__";
+const ALL_ACCOUNTS = "__all_accounts__";
 
 interface CampaignsTableProps {
   mode?: "admin" | "client";
@@ -48,7 +49,7 @@ export default function CampaignsTable({ mode = "admin" }: CampaignsTableProps) 
         const json = await res.json();
         if (!json.ok) throw new Error(json.error);
         setAccounts(json.accounts as MetaAccount[]);
-        if (json.accounts[0]) setAccount(json.accounts[0].id);
+        if (json.accounts.length > 0) setAccount(ALL_ACCOUNTS);
       } catch (e) {
         setError((e as Error).message);
       }
@@ -60,38 +61,23 @@ export default function CampaignsTable({ mode = "admin" }: CampaignsTableProps) 
   }, [isClientMode]);
 
   // Assign a campaign to a client (optimistic + persist to Supabase).
-  async function assignClient(campaignId: string, clientName: string) {
+  async function assignClient(campaignId: string, clientName: string, campaignAccountId?: string) {
     setRows((prev) => prev.map((r) => (r.id === campaignId ? { ...r, client: clientName || "Unassigned" } : r)));
     if (clientName && !roster.includes(clientName)) setRoster((r) => [...r, clientName].sort());
     try {
       await fetch("/api/meta/assign-client", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ campaignId, accountId: account, clientName }),
+        body: JSON.stringify({ campaignId, accountId: campaignAccountId ?? account, clientName }),
       });
     } catch {
       /* keep optimistic value; will reconcile on next load */
     }
   }
 
-  async function handleClientChange(campaignId: string, value: string) {
-    await assignClient(campaignId, value === "Unassigned" ? "" : value);
+  async function handleClientChange(campaignId: string, value: string, campaignAccountId?: string) {
+    await assignClient(campaignId, value === "Unassigned" ? "" : value, campaignAccountId);
   }
-
-  // Admin mode: load campaigns when the selected account changes.
-  useEffect(() => {
-    if (isClientMode || !account) return;
-    setLoading(true);
-    setError(null);
-    fetch(`/api/meta/campaigns?account=${account}`, { cache: "no-store" })
-      .then((r) => r.json())
-      .then((json) => {
-        if (!json.ok) throw new Error(json.error);
-        setRows(json.campaigns as CampaignTableRow[]);
-      })
-      .catch((e) => setError((e as Error).message))
-      .finally(() => setLoading(false));
-  }, [account, isClientMode]);
 
   const businesses = useMemo(() => {
     const set = new Set(accounts.map((a) => a.business || "Other"));
@@ -102,6 +88,35 @@ export default function CampaignsTable({ mode = "admin" }: CampaignsTableProps) 
     () => (business === ALL ? accounts : accounts.filter((a) => (a.business || "Other") === business)),
     [accounts, business]
   );
+
+  const accountName = (id?: string) => accounts.find((a) => a.id === id)?.name ?? id ?? "";
+
+  // Admin mode: load campaigns when the selected account (or "All Ad Accounts") changes.
+  const visibleAccountIds = visibleAccounts.map((a) => a.id).join(",");
+  useEffect(() => {
+    if (isClientMode || !account) return;
+    setLoading(true);
+    setError(null);
+
+    const targets = account === ALL_ACCOUNTS ? visibleAccounts.map((a) => a.id) : [account];
+    if (targets.length === 0) {
+      setRows([]);
+      setLoading(false);
+      return;
+    }
+
+    Promise.all(
+      targets.map((id) =>
+        fetch(`/api/meta/campaigns?account=${id}`, { cache: "no-store" })
+          .then((r) => r.json())
+          .then((json) => (json.ok ? (json.campaigns as CampaignTableRow[]) : []))
+          .catch(() => [] as CampaignTableRow[])
+      )
+    )
+      .then((results) => setRows(results.flat()))
+      .catch((e) => setError((e as Error).message))
+      .finally(() => setLoading(false));
+  }, [account, isClientMode, visibleAccountIds]);
 
   const clients = useMemo(() => {
     const set = new Set(rows.map((r) => r.client));
@@ -116,6 +131,9 @@ export default function CampaignsTable({ mode = "admin" }: CampaignsTableProps) 
       return true;
     });
   }, [rows, client, search]);
+
+  const showAccountCol = !isClientMode && account === ALL_ACCOUNTS;
+  const colSpan = showAccountCol ? 10 : 9;
 
   const totals = useMemo(() => {
     return filtered.reduce(
@@ -145,7 +163,10 @@ export default function CampaignsTable({ mode = "admin" }: CampaignsTableProps) 
                 className="min-w-[170px]"
                 value={account}
                 onChange={setAccount}
-                options={visibleAccounts.map((a) => ({ value: a.id, label: a.name }))}
+                options={[
+                  { value: ALL_ACCOUNTS, label: "All Ad Accounts", accent: true },
+                  ...visibleAccounts.map((a) => ({ value: a.id, label: a.name })),
+                ]}
               />
             </div>
             <div className="flex items-center gap-1.5">
@@ -183,6 +204,7 @@ export default function CampaignsTable({ mode = "admin" }: CampaignsTableProps) 
             <tr className="text-left text-[10px] uppercase tracking-wider text-slate-500">
               <th className="sticky left-0 bg-[#0e1420] px-3 py-2.5 font-semibold">Client</th>
               <th className="px-3 py-2.5 font-semibold">Campaign</th>
+              {showAccountCol && <th className="px-3 py-2.5 font-semibold">Account</th>}
               <th className="px-3 py-2.5 font-semibold">Delivery</th>
               <th className="px-3 py-2.5 text-right font-semibold">Results</th>
               <th className="px-3 py-2.5 text-right font-semibold">Cost / Result</th>
@@ -194,11 +216,11 @@ export default function CampaignsTable({ mode = "admin" }: CampaignsTableProps) 
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={9} className="px-3 py-10 text-center text-slate-500">
+              <tr><td colSpan={colSpan} className="px-3 py-10 text-center text-slate-500">
                 <RefreshCw size={16} className="mx-auto mb-2 animate-spin text-cyan-400" />Loading campaigns…
               </td></tr>
             ) : filtered.length === 0 ? (
-              <tr><td colSpan={9} className="px-3 py-10 text-center text-slate-500">No campaigns match these filters.</td></tr>
+              <tr><td colSpan={colSpan} className="px-3 py-10 text-center text-slate-500">No campaigns match these filters.</td></tr>
             ) : (
               filtered.map((r) => (
                 <tr key={r.id} className="border-t border-white/[0.05] hover:bg-white/[0.02]">
@@ -210,9 +232,9 @@ export default function CampaignsTable({ mode = "admin" }: CampaignsTableProps) 
                         size="sm"
                         className="min-w-[140px]"
                         value={r.client}
-                        onChange={(v) => handleClientChange(r.id, v)}
+                        onChange={(v) => handleClientChange(r.id, v, r.accountId)}
                         allowAddNew
-                        onAddNew={(name) => assignClient(r.id, name)}
+                        onAddNew={(name) => assignClient(r.id, name, r.accountId)}
                         options={[
                           { value: "Unassigned", label: "Unassigned" },
                           ...(!roster.includes(r.client) && r.client !== "Unassigned" ? [{ value: r.client, label: r.client, accent: true }] : []),
@@ -222,6 +244,9 @@ export default function CampaignsTable({ mode = "admin" }: CampaignsTableProps) 
                     )}
                   </td>
                   <td className="max-w-[240px] truncate px-3 py-2.5 font-medium text-slate-100" title={r.name}>{r.name}</td>
+                  {showAccountCol && (
+                    <td className="whitespace-nowrap px-3 py-2.5 text-slate-400">{accountName(r.accountId)}</td>
+                  )}
                   <td className="px-3 py-2.5">
                     <span className="inline-flex items-center gap-1.5 text-slate-300">
                       <span className={`h-1.5 w-1.5 rounded-full ${r.delivery === "Active" ? "bg-emerald-400" : "bg-slate-600"}`} />
@@ -251,7 +276,7 @@ export default function CampaignsTable({ mode = "admin" }: CampaignsTableProps) 
           {filtered.length > 0 && (
             <tfoot>
               <tr className="border-t border-white/[0.1] text-[11px] font-semibold text-slate-200">
-                <td className="sticky left-0 bg-[#0e1420] px-3 py-2.5" colSpan={3}>{filtered.length} campaigns</td>
+                <td className="sticky left-0 bg-[#0e1420] px-3 py-2.5" colSpan={showAccountCol ? 4 : 3}>{filtered.length} campaigns</td>
                 <td className="px-3 py-2.5 text-right">{formatNumber(totals.results)}</td>
                 <td className="px-3 py-2.5"></td>
                 <td className="px-3 py-2.5"></td>
