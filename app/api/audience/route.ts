@@ -13,6 +13,8 @@ export async function GET(req: NextRequest) {
   const batch = sp.get("batch");
   const country = sp.get("country");
   const gen = sp.get("gen");
+  const branch = sp.get("branch");
+  const category = sp.get("category");
   const search = sp.get("search")?.trim();
   const minValue = sp.get("min_value");
   const maxValue = sp.get("max_value");
@@ -27,12 +29,14 @@ export async function GET(req: NextRequest) {
   if (batch) query = query.eq("batch_id", batch);
   if (country) query = query.eq("country", country);
   if (gen) query = query.eq("gen", gen);
+  if (branch) query = query.eq("branch_name", branch);
+  if (category) query = query.eq("category", category);
   if (minValue) query = query.gte("value", Number(minValue));
   if (maxValue) query = query.lte("value", Number(maxValue));
   if (search) {
     const like = `%${search}%`;
     query = query.or(
-      `fn.ilike.${like},ln.ilike.${like},email1.ilike.${like},email2.ilike.${like},email3.ilike.${like},uid.ilike.${like}`
+      `fn.ilike.${like},ln.ilike.${like},full_name.ilike.${like},email1.ilike.${like},email2.ilike.${like},email3.ilike.${like},uid.ilike.${like}`
     );
   }
 

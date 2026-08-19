@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  Upload, Download, Search, RefreshCw, Database, Trash2, Loader2, X, ChevronLeft, ChevronRight,
+  Upload, Download, Search, RefreshCw, Database, Trash2, Loader2, X, ChevronLeft, ChevronRight, Store, Tag,
 } from "lucide-react";
 import CustomSelect from "./CustomSelect";
 import { parseCsv, buildTemplateCsv, type AudienceRow } from "@/lib/audience";
@@ -28,10 +28,14 @@ export default function AudienceTable() {
   const [batches, setBatches] = useState<Batch[]>([]);
   const [countries, setCountries] = useState<string[]>([]);
   const [genders, setGenders] = useState<string[]>([]);
+  const [branches, setBranches] = useState<string[]>([]);
+  const [categories, setCategories] = useState<string[]>([]);
 
   const [batch, setBatch] = useState(ALL);
   const [country, setCountry] = useState(ALL);
   const [gender, setGender] = useState(ALL);
+  const [branch, setBranch] = useState(ALL);
+  const [category, setCategory] = useState(ALL);
   const [search, setSearch] = useState("");
   const [minValue, setMinValue] = useState("");
   const [maxValue, setMaxValue] = useState("");
@@ -58,6 +62,8 @@ export default function AudienceTable() {
       if (j.ok) {
         setCountries(j.countries);
         setGenders(j.genders);
+        setBranches(j.branches);
+        setCategories(j.categories);
       }
     });
   }, []);
@@ -73,6 +79,8 @@ export default function AudienceTable() {
     if (batch !== ALL) params.set("batch", batch);
     if (country !== ALL) params.set("country", country);
     if (gender !== ALL) params.set("gen", gender);
+    if (branch !== ALL) params.set("branch", branch);
+    if (category !== ALL) params.set("category", category);
     if (search.trim()) params.set("search", search.trim());
     if (minValue) params.set("min_value", minValue);
     if (maxValue) params.set("max_value", maxValue);
@@ -87,7 +95,7 @@ export default function AudienceTable() {
       })
       .catch((e) => setError((e as Error).message))
       .finally(() => setLoading(false));
-  }, [batch, country, gender, search, minValue, maxValue, offset]);
+  }, [batch, country, gender, branch, category, search, minValue, maxValue, offset]);
 
   useEffect(() => {
     loadRows();
@@ -96,14 +104,14 @@ export default function AudienceTable() {
   // Reset to page 1 whenever a filter (not offset) changes.
   useEffect(() => {
     setOffset(0);
-  }, [batch, country, gender, search, minValue, maxValue]);
+  }, [batch, country, gender, branch, category, search, minValue, maxValue]);
 
   function downloadTemplate() {
     const blob = new Blob([buildTemplateCsv()], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "meta_value_based_audience_template.csv";
+    a.download = "audience_template.csv";
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -143,7 +151,6 @@ export default function AudienceTable() {
     loadRows();
   }
 
-  const selectCls = "flex items-center gap-1.5";
   const from = total === 0 ? 0 : offset + 1;
   const to = Math.min(offset + PAGE_SIZE, total);
 
@@ -159,7 +166,7 @@ export default function AudienceTable() {
       <div className="glass-panel p-5">
         <h3 className="mb-1 text-sm font-semibold text-slate-200">Upload Audience CSV</h3>
         <p className="mb-4 text-xs text-slate-500">
-          Matches Meta&apos;s Value-Based Custom Audience template exactly — same columns, upload directly.
+          Matches your internal template — Branch/Category/Product + Meta&apos;s value-based audience fields.
         </p>
         <div className="flex flex-wrap items-center gap-3">
           <button
@@ -182,7 +189,7 @@ export default function AudienceTable() {
             onClick={downloadTemplate}
             className="flex items-center gap-2 rounded-lg bg-white/[0.05] px-4 py-2 text-xs font-semibold text-slate-300 hover:bg-white/[0.1]"
           >
-            <Download size={13} /> Download Meta Template
+            <Download size={13} /> Download Template
           </button>
         </div>
         {uploadError && <p className="mt-2 text-xs text-rose-400">{uploadError}</p>}
@@ -210,13 +217,31 @@ export default function AudienceTable() {
       {/* Filters + table */}
       <div className="glass-panel p-4 sm:p-5">
         <div className="mb-4 flex flex-wrap items-center gap-3">
-          <div className={selectCls}>
+          <div className="flex items-center gap-1.5">
             <Database size={14} className="text-slate-500 shrink-0" />
             <CustomSelect
-              className="min-w-[160px]"
+              className="min-w-[150px]"
               value={batch}
               onChange={setBatch}
               options={[{ value: ALL, label: "All Batches" }, ...batches.map((b) => ({ value: b.id, label: b.label }))]}
+            />
+          </div>
+          <div className="flex items-center gap-1.5">
+            <Store size={14} className="text-slate-500 shrink-0" />
+            <CustomSelect
+              className="min-w-[140px]"
+              value={branch}
+              onChange={setBranch}
+              options={[{ value: ALL, label: "All Branches" }, ...branches.map((b) => ({ value: b, label: b }))]}
+            />
+          </div>
+          <div className="flex items-center gap-1.5">
+            <Tag size={14} className="text-slate-500 shrink-0" />
+            <CustomSelect
+              className="min-w-[140px]"
+              value={category}
+              onChange={setCategory}
+              options={[{ value: ALL, label: "All Categories" }, ...categories.map((c) => ({ value: c, label: c }))]}
             />
           </div>
           <CustomSelect
@@ -274,15 +299,20 @@ export default function AudienceTable() {
         )}
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1600px] border-collapse text-xs">
+          <table className="w-full min-w-[2200px] border-collapse text-xs">
             <thead>
               <tr className="text-left text-[10px] uppercase tracking-wider text-slate-500">
-                <th className="sticky left-0 bg-[#0e1420] px-3 py-2.5 font-semibold">Email</th>
+                <th className="sticky left-0 bg-[#0e1420] px-3 py-2.5 font-semibold">Name</th>
+                <th className="px-3 py-2.5 font-semibold">Branch</th>
+                <th className="px-3 py-2.5 font-semibold">Branch City</th>
+                <th className="px-3 py-2.5 font-semibold">Category</th>
+                <th className="px-3 py-2.5 font-semibold">Product</th>
+                <th className="px-3 py-2.5 font-semibold">Email</th>
+                <th className="px-3 py-2.5 font-semibold">Phone</th>
                 <th className="px-3 py-2.5 font-semibold">First Name</th>
                 <th className="px-3 py-2.5 font-semibold">Last Name</th>
-                <th className="px-3 py-2.5 font-semibold">Phone</th>
                 <th className="px-3 py-2.5 font-semibold">City</th>
-                <th className="px-3 py-2.5 font-semibold">State</th>
+                <th className="px-3 py-2.5 font-semibold">Province</th>
                 <th className="px-3 py-2.5 font-semibold">Country</th>
                 <th className="px-3 py-2.5 font-semibold">ZIP</th>
                 <th className="px-3 py-2.5 font-semibold">DOB</th>
@@ -295,20 +325,25 @@ export default function AudienceTable() {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={14} className="px-3 py-10 text-center text-slate-500">
+                <tr><td colSpan={19} className="px-3 py-10 text-center text-slate-500">
                   <RefreshCw size={16} className="mx-auto mb-2 animate-spin text-cyan-400" />Loading audience…
                 </td></tr>
               ) : rows.length === 0 ? (
-                <tr><td colSpan={14} className="px-3 py-10 text-center text-slate-500">
+                <tr><td colSpan={19} className="px-3 py-10 text-center text-slate-500">
                   No records yet. Upload a CSV above to get started.
                 </td></tr>
               ) : (
                 rows.map((r) => (
                   <tr key={r.id} className="border-t border-white/[0.05] hover:bg-white/[0.02]">
-                    <td className="sticky left-0 max-w-[200px] truncate bg-[#0b0e14] px-3 py-2 font-medium text-slate-100" title={r.email1}>{r.email1 || "—"}</td>
+                    <td className="sticky left-0 max-w-[180px] truncate bg-[#0b0e14] px-3 py-2 font-medium text-slate-100" title={r.full_name}>{r.full_name || "—"}</td>
+                    <td className="px-3 py-2 text-slate-300">{r.branch_name || "—"}</td>
+                    <td className="px-3 py-2 text-slate-300">{r.branch_city || "—"}</td>
+                    <td className="px-3 py-2 text-slate-300">{r.category || "—"}</td>
+                    <td className="max-w-[140px] truncate px-3 py-2 text-slate-300" title={r.product}>{r.product || "—"}</td>
+                    <td className="max-w-[180px] truncate px-3 py-2 text-slate-300" title={r.email1}>{r.email1 || "—"}</td>
+                    <td className="px-3 py-2 whitespace-nowrap text-slate-300">{r.phone1 || "—"}</td>
                     <td className="px-3 py-2 text-slate-300">{r.fn || "—"}</td>
                     <td className="px-3 py-2 text-slate-300">{r.ln || "—"}</td>
-                    <td className="px-3 py-2 whitespace-nowrap text-slate-300">{r.phone1 || "—"}</td>
                     <td className="px-3 py-2 text-slate-300">{r.ct || "—"}</td>
                     <td className="px-3 py-2 text-slate-300">{r.st || "—"}</td>
                     <td className="px-3 py-2 text-slate-300">{r.country || "—"}</td>

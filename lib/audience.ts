@@ -1,19 +1,14 @@
-// Value-Based Custom Audience — matches Meta's CSV upload template exactly.
-// Column order matters for the downloadable template but not for parsing
-// (we map by header name, so column order in an uploaded file doesn't matter).
-
-export const META_AUDIENCE_HEADERS = [
-  "email", "email", "email", // 3 email columns (Meta allows duplicates for multiple emails per person)
-  "phone", "phone", "phone",
-  "madid",
-  "fn", "ln",
-  "zip", "ct", "st", "country",
-  "dob", "doby", "gen", "age",
-  "uid",
-  "value",
-] as const;
+// Audience CSV — matches the business's real internal template (extends
+// Meta's Value-Based Custom Audience columns with branch/category/product
+// fields). Semicolon-delimited; comma-delimited files (e.g. Meta's raw
+// export) still parse fine — the delimiter is auto-detected per file.
 
 export interface AudienceRow {
+  branch_city: string; // "City" (1st column) — store/outlet city
+  branch_name: string; // "SC Cabang" — branch/outlet name
+  category: string;
+  product: string; // "Produk"
+  full_name: string; // "Name" — combined, separate from fn/ln
   email1: string;
   email2: string;
   email3: string;
@@ -21,55 +16,64 @@ export interface AudienceRow {
   phone2: string;
   phone3: string;
   madid: string;
-  fn: string;
-  ln: string;
-  zip: string;
-  ct: string;
-  st: string;
+  fn: string; // "Front Name"
+  ln: string; // "Last Name"
+  zip: string; // "Kode Pos"
+  ct: string; // "City" (2nd column) — customer's city
+  st: string; // "Provinsi"
   country: string;
-  dob: string;
-  doby: number | null;
+  dob: string; // "Date of Birth"
+  doby: number | null; // "Year of Borth" (template's own spelling)
   gen: string;
   age: number | null;
   uid: string;
   value: number | null;
 }
 
-// Minimal CSV parser — handles quoted fields, commas inside quotes, and
-// duplicate header names (Meta's template reuses "email"/"phone" 3x each).
+// Auto-detect , vs ; from the header line.
+function detectDelimiter(headerLine: string): string {
+  const commas = (headerLine.match(/,/g) || []).length;
+  const semis = (headerLine.match(/;/g) || []).length;
+  return semis > commas ? ";" : ",";
+}
+
+function splitLine(line: string, delim: string): string[] {
+  const out: string[] = [];
+  let cur = "";
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        cur += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (ch === delim && !inQuotes) {
+      out.push(cur);
+      cur = "";
+    } else {
+      cur += ch;
+    }
+  }
+  out.push(cur);
+  return out.map((s) => s.trim());
+}
+
 export function parseCsv(text: string): AudienceRow[] {
   const lines = text.split(/\r\n|\n|\r/).filter((l) => l.trim().length > 0);
   if (lines.length < 2) return [];
 
-  const splitLine = (line: string): string[] => {
-    const out: string[] = [];
-    let cur = "";
-    let inQuotes = false;
-    for (let i = 0; i < line.length; i++) {
-      const ch = line[i];
-      if (ch === '"') {
-        if (inQuotes && line[i + 1] === '"') {
-          cur += '"';
-          i++;
-        } else {
-          inQuotes = !inQuotes;
-        }
-      } else if (ch === "," && !inQuotes) {
-        out.push(cur);
-        cur = "";
-      } else {
-        cur += ch;
-      }
-    }
-    out.push(cur);
-    return out.map((s) => s.trim());
-  };
+  const delim = detectDelimiter(lines[0]);
+  const headerRaw = splitLine(lines[0], delim).map((h) => h.toLowerCase().trim());
 
-  const headerRaw = splitLine(lines[0]).map((h) => h.toLowerCase().trim());
-  // Positional indices for the 3 email / 3 phone columns (by occurrence order).
-  const emailIdx = headerRaw.reduce<number[]>((a, h, i) => (h === "email" ? [...a, i] : a), []);
-  const phoneIdx = headerRaw.reduce<number[]>((a, h, i) => (h === "phone" ? [...a, i] : a), []);
   const idx = (name: string) => headerRaw.indexOf(name);
+  const allIdx = (name: string) => headerRaw.reduce<number[]>((a, h, i) => (h === name ? [...a, i] : a), []);
+
+  const cityIdx = allIdx("city"); // [0] = branch city, [1] = customer city
+  const phoneNames = ["phone", "phone_3", "phone_4"];
+  const emailNames = ["email", "email_1", "email_2"];
 
   const num = (v: string | undefined): number | null => {
     if (!v) return null;
@@ -79,24 +83,30 @@ export function parseCsv(text: string): AudienceRow[] {
 
   const rows: AudienceRow[] = [];
   for (let i = 1; i < lines.length; i++) {
-    const cells = splitLine(lines[i]);
+    const cells = splitLine(lines[i], delim);
     if (cells.every((c) => !c)) continue;
+
     rows.push({
-      email1: cells[emailIdx[0]] ?? "",
-      email2: cells[emailIdx[1]] ?? "",
-      email3: cells[emailIdx[2]] ?? "",
-      phone1: cells[phoneIdx[0]] ?? "",
-      phone2: cells[phoneIdx[1]] ?? "",
-      phone3: cells[phoneIdx[2]] ?? "",
+      branch_city: cells[cityIdx[0]] ?? "",
+      branch_name: cells[idx("sc cabang")] ?? "",
+      category: cells[idx("category")] ?? "",
+      product: cells[idx("produk")] ?? "",
+      full_name: cells[idx("name")] ?? "",
+      email1: cells[idx(emailNames[0])] ?? "",
+      email2: cells[idx(emailNames[1])] ?? "",
+      email3: cells[idx(emailNames[2])] ?? "",
+      phone1: cells[idx(phoneNames[0])] ?? "",
+      phone2: cells[idx(phoneNames[1])] ?? "",
+      phone3: cells[idx(phoneNames[2])] ?? "",
       madid: cells[idx("madid")] ?? "",
-      fn: cells[idx("fn")] ?? "",
-      ln: cells[idx("ln")] ?? "",
-      zip: cells[idx("zip")] ?? "",
-      ct: cells[idx("ct")] ?? "",
-      st: cells[idx("st")] ?? "",
+      fn: cells[idx("front name")] ?? "",
+      ln: cells[idx("last name")] ?? "",
+      zip: cells[idx("kode pos")] ?? "",
+      ct: cells[cityIdx[1]] ?? cells[cityIdx[0]] ?? "",
+      st: cells[idx("provinsi")] ?? "",
       country: cells[idx("country")] ?? "",
-      dob: cells[idx("dob")] ?? "",
-      doby: num(cells[idx("doby")]),
+      dob: cells[idx("date of birth")] ?? "",
+      doby: num(cells[idx("year of borth")]),
       gen: cells[idx("gen")] ?? "",
       age: num(cells[idx("age")]),
       uid: cells[idx("uid")] ?? "",
@@ -106,11 +116,22 @@ export function parseCsv(text: string): AudienceRow[] {
   return rows;
 }
 
-// Builds a downloadable copy of Meta's template (header + 1 example row).
+// Downloadable copy of the real internal template (header + 1 example row),
+// semicolon-delimited to match the source file exactly.
 export function buildTemplateCsv(): string {
-  const header = META_AUDIENCE_HEADERS.join(",");
-  const example =
-    "elizabetho@fb.com,olsene@fb.com,eolsen@fb.com,1-(650)-561-5622,1-(650)-782-5622,1-(650)-888-5622," +
-    "aece52e7-03ee-455a-b3c4-e57283966239,Elizabeth,Olsen,94046,Menlo Park,CA,US,10/21/68,1968,F,48,1234567890,20.1";
+  const header = [
+    "City", "SC Cabang", "Category", "Produk", "Name",
+    "phone", "phone_3", "phone_4",
+    "email", "email_1", "email_2",
+    "madid", "Front Name", "Last Name", "Kode Pos", "City", "Provinsi", "country",
+    "Date of Birth", "Year of Borth", "gen", "age", "UID", "Value",
+  ].join(";");
+  const example = [
+    "Jakarta", "Cabang Kelapa Gading", "Elektronik", "Panasonic AC",
+    "Elizabeth Olsen", "1-(650)-561-5622", "1-(650)-782-5622", "1-(650)-888-5622",
+    "elizabetho@fb.com", "olsene@fb.com", "eolsen@fb.com",
+    "aece52e7-03ee-455a-b3c4-e57283966239", "Elizabeth", "Olsen", "94046",
+    "Menlo Park", "CA", "US", "10/21/68", "1968", "F", "48", "1234567890", "20.1",
+  ].join(";");
   return `${header}\n${example}\n`;
 }
