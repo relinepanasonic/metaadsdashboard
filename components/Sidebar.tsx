@@ -15,6 +15,7 @@ import {
   Plug,
   UserCog,
   LogOut,
+  Users2,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
@@ -49,6 +50,7 @@ function navFor(role: Me["role"]): { main: NavItem[]; bottom: NavItem[] } {
     { label: "Meta Ads", href: "/meta-ads", icon: Share2, badge: "Live" },
     { label: "Google Ads", href: "/google-ads", icon: Globe, badge: "Soon" },
     { label: "Campaigns", href: "/campaigns", icon: Megaphone },
+    { label: "Audience", href: "/audience", icon: Users2 },
     { label: "Leads", href: "/leads", icon: Users },
   ];
   const bottom: NavItem[] = [
