@@ -40,7 +40,11 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const { data, error, count } = await query;
-  if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
-  return NextResponse.json({ ok: true, rows: data ?? [], total: count ?? 0 });
+  try {
+    const { data, error, count } = await query;
+    if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+    return NextResponse.json({ ok: true, rows: data ?? [], total: count ?? 0 });
+  } catch (err) {
+    return NextResponse.json({ ok: false, error: (err as Error).message }, { status: 500 });
+  }
 }

@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  Upload, Download, Search, RefreshCw, Database, Trash2, Loader2, X, ChevronLeft, ChevronRight, Store, Tag,
+  Upload, Download, Search, RefreshCw, Database, Trash2, Loader2, X, ChevronLeft, ChevronRight, Store, Tag, Merge,
 } from "lucide-react";
 import CustomSelect from "./CustomSelect";
+import CategoryMerger from "./CategoryMerger";
 import { parseCsv, buildTemplateCsv, type AudienceRow } from "@/lib/audience";
 import { formatNumber } from "@/lib/format";
 
@@ -49,6 +50,7 @@ export default function AudienceTable() {
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [showMerger, setShowMerger] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   function flash(msg: string) {
@@ -191,6 +193,14 @@ export default function AudienceTable() {
           >
             <Download size={13} /> Download Template
           </button>
+          <button
+            onClick={() => setShowMerger((v) => !v)}
+            className={`flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-semibold ${
+              showMerger ? "bg-cyan-500/20 text-cyan-300" : "bg-white/[0.05] text-slate-300 hover:bg-white/[0.1]"
+            }`}
+          >
+            <Merge size={13} /> Manage Categories
+          </button>
         </div>
         {uploadError && <p className="mt-2 text-xs text-rose-400">{uploadError}</p>}
 
@@ -213,6 +223,15 @@ export default function AudienceTable() {
           </div>
         )}
       </div>
+
+      {showMerger && (
+        <CategoryMerger
+          onMerged={() => {
+            loadFacets();
+            loadRows();
+          }}
+        />
+      )}
 
       {/* Filters + table */}
       <div className="glass-panel p-4 sm:p-5">
