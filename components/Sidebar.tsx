@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -11,7 +12,6 @@ import {
   Users,
   Settings,
   ChevronLeft,
-  Activity,
   Plug,
   UserCog,
   LogOut,
@@ -134,14 +134,14 @@ export default function Sidebar() {
       {/* Logo */}
       <div className="flex items-center gap-2.5 px-4 py-5">
         <span
-          className="grid h-9 w-9 shrink-0 place-items-center rounded-lg"
-          style={{ background: "rgba(59,130,246,0.12)", boxShadow: "0 0 0 1px rgba(59,130,246,0.4)" }}
+          className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-lg"
+          style={{ boxShadow: "0 0 0 1px rgba(59,130,246,0.4)" }}
         >
-          <Activity size={18} className="text-cyan-400" />
+          <Image src="/logo-icon.png" alt="Reline Meta Project" width={36} height={36} className="h-full w-full object-cover" />
         </span>
         {!collapsed && (
           <div className="min-w-0">
-            <div className="truncate text-sm font-black text-white">Ads Engine</div>
+            <div className="truncate text-sm font-black text-white">Reline Meta Project</div>
             <div className="truncate text-[10px] text-slate-500">Prof Toko Online</div>
           </div>
         )}

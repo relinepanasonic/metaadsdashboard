@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Image from "next/image";
 import {
   Wallet,
   MessageCircle,
@@ -99,8 +100,8 @@ export default function DashboardClient() {
       {/* Header */}
       <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-2">
-          <span className="grid h-9 w-9 place-items-center rounded-lg" style={{ background: "rgba(59,130,246,0.12)", boxShadow: "0 0 0 1px rgba(59,130,246,0.4)" }}>
-            <Activity size={18} className="text-cyan-400" />
+          <span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-lg" style={{ boxShadow: "0 0 0 1px rgba(59,130,246,0.4)" }}>
+            <Image src="/logo-icon.png" alt="Reline Meta Project" width={36} height={36} className="h-full w-full object-cover" />
           </span>
           <h1 className="text-xl font-black tracking-tight text-white sm:text-2xl">
             Ads <span className="neon-text-cyan">Dashboard</span>

@@ -3,7 +3,7 @@ import "./globals.css";
 import AppShell from "@/components/AppShell";
 
 export const metadata: Metadata = {
-  title: "Unified Ads Command Center · Prof Toko Online",
+  title: "Reline Meta Project · Prof Toko Online",
   description: "Meta Ads + Google Ads unified analytics dashboard",
 };
 
