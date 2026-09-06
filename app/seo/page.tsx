@@ -1,3 +1,5 @@
+"use client";
+
 import { PiggyBank, MousePointer2, Target, TrendingUp, Sparkles } from "lucide-react";
 import KpiCard from "@/components/KpiCard";
 import Panel from "@/components/Panel";
