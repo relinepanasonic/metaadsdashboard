@@ -16,6 +16,7 @@ import {
   UserCog,
   LogOut,
   Users2,
+  Search,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
@@ -51,6 +52,7 @@ function navFor(role: Me["role"]): { main: NavItem[]; bottom: NavItem[] } {
     { label: "Google Ads", href: "/google-ads", icon: Globe, badge: "Soon" },
     { label: "Campaigns", href: "/campaigns", icon: Megaphone },
     { label: "Audience", href: "/audience", icon: Users2 },
+    { label: "SEO #1", href: "/seo", icon: Search, badge: "New" },
     { label: "Leads", href: "/leads", icon: Users },
   ];
   const bottom: NavItem[] = [
@@ -84,7 +86,7 @@ export default function Sidebar() {
   const { main, bottom } = navFor(me?.role ?? "advertiser");
 
   const renderItem = (item: NavItem) => {
-    const active = pathname === item.href;
+    const active = item.href === "/" ? pathname === "/" : pathname === item.href || pathname.startsWith(item.href + "/");
     const Icon = item.icon;
     return (
       <Link
