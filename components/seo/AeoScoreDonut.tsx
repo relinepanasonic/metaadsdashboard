@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { ResponsiveContainer, RadialBarChart, RadialBar, PolarAngleAxis } from "recharts";
 
 function scoreColor(score: number): string {
@@ -12,6 +13,10 @@ function scoreColor(score: number): string {
 export default function AeoScoreDonut({ score }: { score: number }) {
   const color = scoreColor(score);
   const data = [{ name: "AEO", value: score, fill: color }];
+
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  if (!mounted) return <div className="h-full w-full" />;
 
   return (
     <div className="relative h-full w-full">

@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -14,6 +15,10 @@ import type { TrafficPoint } from "@/lib/seo/mock";
 import { compactNumber, formatNumber } from "@/lib/format";
 
 export default function TrafficOverlayChart({ data }: { data: TrafficPoint[] }) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  if (!mounted) return <div className="h-full w-full" />;
+
   return (
     <ResponsiveContainer width="100%" height="100%">
       <AreaChart data={data} margin={{ top: 10, right: 8, left: 0, bottom: 0 }}>

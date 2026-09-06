@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -25,6 +25,7 @@ interface NavItem {
   href: string;
   icon: typeof LayoutDashboard;
   badge?: string;
+  separatorAfter?: boolean;
 }
 
 interface Me {
@@ -48,11 +49,12 @@ function navFor(role: Me["role"]): { main: NavItem[]; bottom: NavItem[] } {
 
   const main: NavItem[] = [
     { label: "Overview", href: "/", icon: LayoutDashboard },
+    // Core ad channels
     { label: "Meta Ads", href: "/meta-ads", icon: Share2, badge: "Live" },
     { label: "Google Ads", href: "/google-ads", icon: Globe, badge: "Soon" },
+    { label: "SEO #1", href: "/seo", icon: Search, badge: "New", separatorAfter: true },
     { label: "Campaigns", href: "/campaigns", icon: Megaphone },
     { label: "Audience", href: "/audience", icon: Users2 },
-    { label: "SEO #1", href: "/seo", icon: Search, badge: "New" },
     { label: "Leads", href: "/leads", icon: Users },
   ];
   const bottom: NavItem[] = [
@@ -156,7 +158,17 @@ export default function Sidebar() {
             Analytics
           </span>
         )}
-        {main.map(renderItem)}
+        {main.map((item) => (
+          <Fragment key={item.href}>
+            {renderItem(item)}
+            {item.separatorAfter && !collapsed && (
+              <div className="my-2 border-t border-white/[0.07]" />
+            )}
+            {item.separatorAfter && collapsed && (
+              <div className="mx-auto my-2 h-px w-6 bg-white/[0.1]" />
+            )}
+          </Fragment>
+        ))}
 
         <div className="mt-auto flex flex-col gap-1 pt-4">
           {!collapsed && (

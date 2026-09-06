@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "recharts";
 import { formatNumber } from "@/lib/format";
 
@@ -21,6 +22,10 @@ export default function IndexingHealth({ indexed, discoveredNotIndexed, errors40
   ];
   const total = data.reduce((a, d) => a + d.value, 0);
   const healthPct = Math.round((indexed / total) * 100);
+
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  if (!mounted) return <div className="h-full w-full" />;
 
   return (
     <div className="flex h-full flex-col">
