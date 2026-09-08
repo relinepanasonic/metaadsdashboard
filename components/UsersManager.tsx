@@ -60,6 +60,7 @@ export default function UsersManager({ myRole, myId }: { myRole: string; myId: s
   const [clientError, setClientError] = useState<string | null>(null);
   const [deletingClient, setDeletingClient] = useState<string | null>(null);
   const [deletingUser, setDeletingUser] = useState<string | null>(null);
+  const [showInviteForm, setShowInviteForm] = useState(false);
 
   // New-invite form state
   const [newRole, setNewRole] = useState<"superadmin" | "advertiser" | "client">("client");
@@ -171,6 +172,7 @@ export default function UsersManager({ myRole, myId }: { myRole: string; myId: s
       setNewClient("");
       setNewClientCustom("");
       setNewAccounts([]);
+      setShowInviteForm(false);
       loadAll();
     } catch (e) {
       setCreateError((e as Error).message);
@@ -315,8 +317,22 @@ export default function UsersManager({ myRole, myId }: { myRole: string; myId: s
       </div>
 
       {/* Create invite */}
+      {!showInviteForm ? (
+        <button
+          onClick={() => setShowInviteForm(true)}
+          className="flex items-center gap-2 self-start rounded-lg bg-cyan-500/15 px-4 py-2.5 text-xs font-semibold text-cyan-300 hover:bg-cyan-500/25"
+          style={{ boxShadow: "inset 0 0 0 1px rgba(34,211,238,0.4)" }}
+        >
+          <UserPlus size={14} /> Invite New User
+        </button>
+      ) : (
       <div className="glass-panel p-5">
-        <h3 className="mb-4 text-sm font-semibold text-slate-200">Invite a new user</h3>
+        <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-200">
+          Invite a new user
+          <button onClick={() => setShowInviteForm(false)} className="ml-auto flex items-center gap-1 rounded-md bg-white/[0.05] px-2 py-0.5 text-[10px] font-medium text-slate-400 hover:bg-white/[0.1]">
+            <X size={10} /> Cancel
+          </button>
+        </h3>
         <div className="flex flex-wrap items-end gap-3">
           <div>
             <label className="mb-1.5 block text-[10px] uppercase tracking-wider text-slate-500">Role</label>
@@ -389,6 +405,7 @@ export default function UsersManager({ myRole, myId }: { myRole: string; myId: s
         </div>
         {createError && <p className="mt-2 text-xs text-rose-400">{createError}</p>}
       </div>
+      )}
 
       {/* Pending invites */}
       {invites.length > 0 && (
@@ -444,47 +461,63 @@ export default function UsersManager({ myRole, myId }: { myRole: string; myId: s
         ) : users.length === 0 ? (
           <p className="py-6 text-center text-xs text-slate-500">No users yet.</p>
         ) : (
-          <div className="flex flex-col gap-2">
-            {users.map((u) => {
-              const badge = ROLE_BADGE[u.role];
-              const Icon = badge.icon;
-              return (
-                <div key={u.id} className="flex items-center gap-3 rounded-lg border border-white/[0.06] px-3 py-2.5">
-                  <span className={`flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-semibold ${badge.cls}`}>
-                    <Icon size={11} />
-                    {u.role}
-                  </span>
-                  <div>
-                    <div className="text-xs font-semibold text-slate-100">{u.username}</div>
-                    <div className="text-[10px] text-slate-500">{u.email}</div>
-                  </div>
-                  {u.client_name && <span className="text-[11px] text-slate-400">→ {u.client_name}</span>}
-                  {u.adAccountIds?.length > 0 && (
-                    <span className="text-[11px] text-slate-400">
-                      → {u.adAccountIds.map((id) => accounts.find((a) => a.id === id)?.name ?? id).join(", ")}
-                    </span>
-                  )}
-                  <div className="ml-auto flex items-center gap-1.5">
-                    <button
-                      onClick={() => sendReset(u.email)}
-                      className="flex items-center gap-1 rounded-md bg-white/[0.05] px-2 py-1 text-[11px] text-slate-300 hover:bg-white/[0.1]"
-                    >
-                      <KeyRound size={11} /> Send reset link
-                    </button>
-                    {u.role !== "founder" && u.id !== myId && (
-                      <button
-                        onClick={() => deleteUser(u.id, u.username)}
-                        disabled={deletingUser === u.id}
-                        className="flex items-center gap-1 rounded-md bg-rose-500/10 px-2 py-1 text-[11px] text-rose-300 hover:bg-rose-500/20 disabled:opacity-50"
-                      >
-                        {deletingUser === u.id ? <Loader2 size={11} className="animate-spin" /> : <Trash2 size={11} />}
-                        Remove
-                      </button>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[720px] border-collapse text-xs">
+              <thead>
+                <tr className="text-left text-[10px] uppercase tracking-wider text-slate-500">
+                  <th className="px-3 py-2.5 font-semibold">Role</th>
+                  <th className="px-3 py-2.5 font-semibold">Username</th>
+                  <th className="px-3 py-2.5 font-semibold">Email</th>
+                  <th className="px-3 py-2.5 font-semibold">Scope</th>
+                  <th className="px-3 py-2.5 text-right font-semibold">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {users.map((u) => {
+                  const badge = ROLE_BADGE[u.role];
+                  const Icon = badge.icon;
+                  return (
+                    <tr key={u.id} className="border-t border-white/[0.05] hover:bg-white/[0.02]">
+                      <td className="px-3 py-2.5">
+                        <span className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-semibold ${badge.cls}`}>
+                          <Icon size={11} />
+                          {u.role}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2.5 font-medium text-slate-100">{u.username}</td>
+                      <td className="px-3 py-2.5 text-slate-400">{u.email}</td>
+                      <td className="px-3 py-2.5 text-slate-400">
+                        {u.client_name && <span>{u.client_name}</span>}
+                        {u.adAccountIds?.length > 0 && (
+                          <span>{u.adAccountIds.map((id) => accounts.find((a) => a.id === id)?.name ?? id).join(", ")}</span>
+                        )}
+                        {!u.client_name && u.adAccountIds?.length === 0 && <span className="text-slate-600">—</span>}
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            onClick={() => sendReset(u.email)}
+                            className="flex items-center gap-1 rounded-md bg-white/[0.05] px-2 py-1 text-[11px] text-slate-300 hover:bg-white/[0.1]"
+                          >
+                            <KeyRound size={11} /> Reset
+                          </button>
+                          {u.role !== "founder" && u.id !== myId && (
+                            <button
+                              onClick={() => deleteUser(u.id, u.username)}
+                              disabled={deletingUser === u.id}
+                              className="flex items-center gap-1 rounded-md bg-rose-500/10 px-2 py-1 text-[11px] text-rose-300 hover:bg-rose-500/20 disabled:opacity-50"
+                            >
+                              {deletingUser === u.id ? <Loader2 size={11} className="animate-spin" /> : <Trash2 size={11} />}
+                              Remove
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         )}
       </div>
