@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Bookmark, X, Search } from "lucide-react";
+import { Bookmark, X, Search, Plus } from "lucide-react";
 import { formatNumber } from "@/lib/format";
 
 interface SavedKeyword {
@@ -20,12 +20,18 @@ const SOURCE_LABEL: Record<string, string> = {
   research: "Keyword Ideas",
   gap: "Keyword Gap",
   ranked: "Competitor Keywords",
+  manual: "Added manually",
 };
 
 export default function KeywordsPage() {
   const [keywords, setKeywords] = useState<SavedKeyword[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("");
+
+  const [newKeyword, setNewKeyword] = useState("");
+  const [newVolume, setNewVolume] = useState("");
+  const [adding, setAdding] = useState(false);
+  const [addError, setAddError] = useState("");
 
   useEffect(() => {
     fetch("/api/seo/keywords/saved", { cache: "no-store" })
@@ -38,6 +44,57 @@ export default function KeywordsPage() {
   async function remove(id: string) {
     setKeywords((prev) => prev.filter((k) => k.id !== id));
     await fetch(`/api/seo/keywords/saved/${id}`, { method: "DELETE" });
+  }
+
+  // Accepts one keyword or a pasted list (newline / comma separated).
+  async function addManual() {
+    const terms = newKeyword
+      .split(/[\n,]/)
+      .map((t) => t.trim())
+      .filter(Boolean);
+    if (terms.length === 0) return;
+
+    setAdding(true);
+    setAddError("");
+    const volume = newVolume.trim() ? parseInt(newVolume.trim(), 10) : undefined;
+    const added: SavedKeyword[] = [];
+
+    for (const term of terms) {
+      if (keywords.some((k) => k.keyword.toLowerCase() === term.toLowerCase() && k.source === "manual")) continue;
+      const res = await fetch("/api/seo/keywords/saved", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          keyword: term,
+          volume: Number.isFinite(volume) ? volume : undefined,
+          source: "manual",
+          context: "manual",
+        }),
+      }).then((r) => r.json());
+
+      if (res.ok) {
+        added.push({
+          id: res.id,
+          keyword: term,
+          volume: Number.isFinite(volume) ? volume! : null,
+          difficulty: null,
+          cpc_usd: null,
+          position: null,
+          source: "manual",
+          context: "manual",
+          created_at: new Date().toISOString(),
+        });
+      } else {
+        setAddError(res.error || "Failed to add keyword.");
+      }
+    }
+
+    if (added.length > 0) {
+      setKeywords((prev) => [...added, ...prev]);
+      setNewKeyword("");
+      setNewVolume("");
+    }
+    setAdding(false);
   }
 
   const visible = filter
@@ -78,12 +135,52 @@ export default function KeywordsPage() {
         </div>
       </div>
 
+      {/* Manual add */}
+      <div className="glass-panel p-4">
+        <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-100">
+          <Plus size={16} className="text-emerald-400" /> Add keywords manually
+        </div>
+        <p className="mb-3 text-xs text-slate-500">
+          Type a keyword, or paste a list separated by commas or new lines to add several at once.
+        </p>
+        <div className="flex flex-wrap items-start gap-3">
+          <textarea
+            value={newKeyword}
+            onChange={(e) => setNewKeyword(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                addManual();
+              }
+            }}
+            rows={1}
+            placeholder="jasa kelola toko shopee"
+            className="min-w-[240px] flex-1 resize-y rounded-lg border border-white/[0.12] bg-[#0b0e14] px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-600 focus:border-emerald-500/50 focus:outline-none"
+          />
+          <input
+            value={newVolume}
+            onChange={(e) => setNewVolume(e.target.value.replace(/[^0-9]/g, ""))}
+            placeholder="Volume (optional)"
+            className="w-[150px] rounded-lg border border-white/[0.12] bg-[#0b0e14] px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-600 focus:border-emerald-500/50 focus:outline-none"
+          />
+          <button
+            onClick={addManual}
+            disabled={adding || !newKeyword.trim()}
+            className="flex items-center gap-2 rounded-lg bg-emerald-500/15 px-5 py-2.5 text-sm font-semibold text-emerald-300 hover:bg-emerald-500/25 disabled:opacity-50"
+            style={{ boxShadow: "inset 0 0 0 1px rgba(52,211,153,0.4)" }}
+          >
+            <Plus size={15} /> {adding ? "Adding…" : "Add"}
+          </button>
+        </div>
+        {addError && <div className="mt-2 text-xs text-rose-300">{addError}</div>}
+      </div>
+
       {keywords.length === 0 ? (
         <div className="glass-panel p-8 text-center">
           <Bookmark size={28} className="mx-auto mb-3 text-slate-600" />
           <div className="text-sm font-semibold text-slate-300">No saved keywords yet</div>
           <div className="mt-1 text-xs text-slate-500">
-            Go to the <span className="text-cyan-300">Research</span> tab, find keywords from keyword ideas or competitor analysis, and bookmark them.
+            Add one above, or go to the <span className="text-cyan-300">Research</span> tab and bookmark keywords from keyword ideas or competitor analysis.
           </div>
         </div>
       ) : (
@@ -112,7 +209,7 @@ export default function KeywordsPage() {
                       <td className="px-3 py-2.5 font-medium text-slate-100">{k.keyword}</td>
                       <td className="px-3 py-2.5 text-slate-400">
                         {SOURCE_LABEL[k.source] ?? k.source}
-                        {k.context && <span className="text-slate-600"> &middot; {k.context}</span>}
+                        {k.context && k.source !== "manual" && <span className="text-slate-600"> &middot; {k.context}</span>}
                       </td>
                       <td className="px-3 py-2.5 text-right text-slate-300">{k.volume != null ? formatNumber(k.volume) : "—"}</td>
                       <td className="px-3 py-2.5 text-right text-slate-300">{k.difficulty != null ? k.difficulty : "—"}</td>
