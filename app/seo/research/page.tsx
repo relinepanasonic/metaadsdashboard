@@ -8,6 +8,7 @@ import CustomSelect from "@/components/CustomSelect";
 import KeywordResearch from "@/components/seo/KeywordResearch";
 import SerpTable from "@/components/seo/SerpTable";
 import RealQueryTable from "@/components/seo/RealQueryTable";
+import RealKeywordResearch from "@/components/seo/RealKeywordResearch";
 import { keywordResults, serpTable } from "@/lib/seo/mock";
 import type { QueryRow } from "@/lib/services/searchConsole";
 
@@ -25,6 +26,7 @@ export default function ResearchPage() {
   const [loadingSites, setLoadingSites] = useState(true);
   const [loadingData, setLoadingData] = useState(false);
   const [filter, setFilter] = useState("");
+  const [dfConfigured, setDfConfigured] = useState<boolean | null>(null);
 
   useEffect(() => {
     fetch("/api/seo/gsc/sites", { cache: "no-store" })
@@ -49,6 +51,13 @@ export default function ResearchPage() {
       })
       .finally(() => setLoadingData(false));
   }, [selected]);
+
+  useEffect(() => {
+    fetch("/api/seo/dataforseo/status", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => setDfConfigured(j.ok ? j.configured : false))
+      .catch(() => setDfConfigured(false));
+  }, []);
 
   const isLive = sites.length > 0;
 
@@ -93,8 +102,20 @@ export default function ResearchPage() {
         ) : (
           <RealQueryTable rows={queries} filter={filter} onFilterChange={setFilter} />
         )
-      ) : (
+      ) : null}
+
+      {/* Keyword research + competitor SERP — DataForSEO */}
+      {dfConfigured ? (
+        <RealKeywordResearch defaultSeed="panasonic ac" />
+      ) : dfConfigured === false ? (
         <>
+          <div className="glass-panel flex flex-wrap items-center gap-3 p-4" style={{ boxShadow: "inset 0 0 0 1px rgba(251,191,36,0.3)" }}>
+            <Plug size={18} className="text-amber-400" />
+            <div className="min-w-0">
+              <div className="text-sm font-semibold text-amber-300">Keyword research is showing demo data</div>
+              <div className="text-xs text-slate-400">Connect a DataForSEO API key to see real search volume, difficulty, and competitor rankings.</div>
+            </div>
+          </div>
           <KeywordResearch results={keywordResults} />
 
           <Panel
@@ -105,7 +126,7 @@ export default function ResearchPage() {
             <SerpTable rows={serpTable} />
           </Panel>
         </>
-      )}
+      ) : null}
     </div>
   );
 }
