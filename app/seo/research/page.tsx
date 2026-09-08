@@ -2,44 +2,28 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Trophy, Plug, Globe2 } from "lucide-react";
-import Panel from "@/components/Panel";
-import CustomSelect from "@/components/CustomSelect";
-import KeywordResearch from "@/components/seo/KeywordResearch";
-import SerpTable from "@/components/seo/SerpTable";
+import { Plug } from "lucide-react";
 import RealQueryTable from "@/components/seo/RealQueryTable";
 import RealKeywordResearch from "@/components/seo/RealKeywordResearch";
 import CompetitorAnalysis from "@/components/seo/CompetitorAnalysis";
-import SavedKeywordsPanel, { type SavedKeyword } from "@/components/seo/SavedKeywordsPanel";
-import { keywordResults, serpTable } from "@/lib/seo/mock";
+import { useSeoSite } from "@/components/seo/SeoSiteProvider";
 import type { QueryRow } from "@/lib/services/searchConsole";
 
-interface SiteConnection {
+interface SavedKw {
   id: string;
-  site_url: string;
-  label: string;
-  status: "pending" | "connected" | "error";
-}
-
-// Strips "sc-domain:" / protocol / trailing slash so a Search Console
-// site_url becomes a bare domain to prefill the competitor-analysis input.
-function bareDomain(input: string): string {
-  return input
-    .replace(/^sc-domain:/, "")
-    .replace(/^https?:\/\//, "")
-    .replace(/\/$/, "")
-    .trim();
+  keyword: string;
+  source: string;
+  context: string | null;
 }
 
 export default function ResearchPage() {
-  const [sites, setSites] = useState<SiteConnection[]>([]);
-  const [selected, setSelected] = useState("");
+  const { sites, selected, loading: loadingSites } = useSeoSite();
   const [queries, setQueries] = useState<QueryRow[]>([]);
-  const [loadingSites, setLoadingSites] = useState(true);
   const [loadingData, setLoadingData] = useState(false);
   const [filter, setFilter] = useState("");
   const [dfConfigured, setDfConfigured] = useState<boolean | null>(null);
-  const [savedKeywords, setSavedKeywords] = useState<SavedKeyword[]>([]);
+
+  const [savedKeywords, setSavedKeywords] = useState<SavedKw[]>([]);
 
   useEffect(() => {
     fetch("/api/seo/keywords/saved", { cache: "no-store" })
@@ -68,39 +52,11 @@ export default function ResearchPage() {
     }).then((r) => r.json());
     if (res.ok) {
       setSavedKeywords((prev) => [
-        {
-          id: res.id,
-          keyword: payload.keyword,
-          volume: payload.volume ?? null,
-          difficulty: payload.difficulty ?? null,
-          cpc_usd: payload.cpcUsd ?? null,
-          position: payload.position ?? null,
-          source: payload.source,
-          context: payload.context,
-          created_at: new Date().toISOString(),
-        },
+        { id: res.id, keyword: payload.keyword, source: payload.source, context: payload.context },
         ...prev,
       ]);
     }
   }
-
-  async function removeSavedKeyword(id: string) {
-    setSavedKeywords((prev) => prev.filter((k) => k.id !== id));
-    await fetch(`/api/seo/keywords/saved/${id}`, { method: "DELETE" });
-  }
-
-  useEffect(() => {
-    fetch("/api/seo/gsc/sites", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((j) => {
-        if (j.ok) {
-          const connected = (j.sites as SiteConnection[]).filter((s) => s.status === "connected");
-          setSites(connected);
-          if (connected[0]) setSelected(connected[0].id);
-        }
-      })
-      .finally(() => setLoadingSites(false));
-  }, []);
 
   useEffect(() => {
     if (!selected) return;
@@ -142,55 +98,29 @@ export default function ResearchPage() {
         </div>
       )}
 
-      {/* Website selector */}
-      {isLive && (
-        <div className="glass-panel flex flex-wrap items-center gap-3 p-3">
-          <div className="flex items-center gap-1.5">
-            <Globe2 size={14} className="shrink-0 text-slate-500" />
-            <CustomSelect
-              className="min-w-[180px]"
-              value={selected}
-              onChange={setSelected}
-              options={sites.map((s) => ({ value: s.id, label: s.label }))}
-            />
-          </div>
-        </div>
-      )}
-
+      {/* Search Console queries */}
       {isLive ? (
         loadingData ? (
-          <div className="glass-panel p-6 text-center text-xs text-slate-500">Loading Search Console queries…</div>
+          <div className="glass-panel p-6 text-center text-xs text-slate-500">Loading Search Console queries&hellip;</div>
         ) : (
           <RealQueryTable rows={queries} filter={filter} onFilterChange={setFilter} />
         )
       ) : null}
 
-      {/* Keyword research + competitor SERP — DataForSEO */}
+      {/* Keyword research + Competitor — DataForSEO */}
       {dfConfigured ? (
         <>
-          <SavedKeywordsPanel keywords={savedKeywords} onRemove={removeSavedKeyword} />
           <RealKeywordResearch suggestions={queries.slice(0, 6).map((q) => q.query)} onSave={saveKeyword} isSaved={isKeywordSaved} />
-          <CompetitorAnalysis yourDomain={sites[0] ? bareDomain(sites[0].site_url) : ""} onSave={saveKeyword} isSaved={isKeywordSaved} />
+          <CompetitorAnalysis onSave={saveKeyword} isSaved={isKeywordSaved} />
         </>
       ) : dfConfigured === false ? (
-        <>
-          <div className="glass-panel flex flex-wrap items-center gap-3 p-4" style={{ boxShadow: "inset 0 0 0 1px rgba(251,191,36,0.3)" }}>
-            <Plug size={18} className="text-amber-400" />
-            <div className="min-w-0">
-              <div className="text-sm font-semibold text-amber-300">Keyword research is showing demo data</div>
-              <div className="text-xs text-slate-400">Connect a DataForSEO API key to see real search volume, difficulty, and competitor rankings.</div>
-            </div>
+        <div className="glass-panel flex flex-wrap items-center gap-3 p-4" style={{ boxShadow: "inset 0 0 0 1px rgba(251,191,36,0.3)" }}>
+          <Plug size={18} className="text-amber-400" />
+          <div className="min-w-0">
+            <div className="text-sm font-semibold text-amber-300">Keyword research requires DataForSEO</div>
+            <div className="text-xs text-slate-400">Add your DataForSEO API credentials as environment variables to unlock keyword ideas and competitor analysis.</div>
           </div>
-          <KeywordResearch results={keywordResults} />
-
-          <Panel
-            title="Competitor SERP — top 10 (demo)"
-            subtitle="Current ranking pages for &quot;panasonic ac 1 pk murah&quot;"
-            right={<Trophy size={16} className="text-amber-400" />}
-          >
-            <SerpTable rows={serpTable} />
-          </Panel>
-        </>
+        </div>
       ) : null}
     </div>
   );

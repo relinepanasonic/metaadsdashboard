@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, SearchCode, Factory, Sparkles, Wrench, Plug } from "lucide-react";
+import { LayoutDashboard, SearchCode, Factory, Sparkles, Wrench, Plug, Bookmark } from "lucide-react";
 
 const TABS = [
   { href: "/seo", label: "Dashboard", icon: LayoutDashboard },
   { href: "/seo/research", label: "Research", icon: SearchCode },
+  { href: "/seo/keywords", label: "Keywords", icon: Bookmark },
   { href: "/seo/content", label: "Content Engine", icon: Factory },
   { href: "/seo/geo", label: "GEO & AI Visibility", icon: Sparkles },
   { href: "/seo/technical", label: "Technical & Indexing", icon: Wrench },

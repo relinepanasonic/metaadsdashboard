@@ -10,8 +10,11 @@ export async function GET(req: NextRequest) {
   const domain = req.nextUrl.searchParams.get("domain");
   if (!domain) return NextResponse.json({ ok: false, error: "Missing ?domain=" }, { status: 400 });
 
+  const limitParam = req.nextUrl.searchParams.get("limit");
+  const limit = limitParam ? Math.min(Math.max(parseInt(limitParam, 10) || 50, 1), 200) : 50;
+
   try {
-    const keywords = await fetchRankedKeywords(domain);
+    const keywords = await fetchRankedKeywords(domain, limit);
     return NextResponse.json({ ok: true, domain, keywords });
   } catch (err) {
     return NextResponse.json({ ok: false, error: (err as Error).message }, { status: 500 });
