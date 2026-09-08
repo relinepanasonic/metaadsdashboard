@@ -142,29 +142,6 @@ export const serpTable: SerpRow[] = [
 ];
 
 // ---------------------------------------------------------------------------
-// Content Engine
-// ---------------------------------------------------------------------------
-export type PipelineStage = "Briefing" | "AI Drafting" | "Review" | "Published";
-export interface ContentItem {
-  id: string;
-  title: string;
-  keyword: string;
-  tone: string;
-  stage: PipelineStage;
-  words: number;
-  aeoOptimized: boolean;
-}
-
-export const contentPipeline: ContentItem[] = [
-  { id: "c1", title: "Panduan Memilih AC 1 PK untuk Kamar Kecil", keyword: "panasonic ac 1 pk", tone: "Helpful", stage: "Briefing", words: 0, aeoOptimized: false },
-  { id: "c2", title: "5 Rice Cooker Terbaik untuk Keluarga 2026", keyword: "rice cooker panasonic", tone: "Persuasive", stage: "Briefing", words: 0, aeoOptimized: false },
-  { id: "c3", title: "Cara Merawat AC agar Awet & Hemat Listrik", keyword: "cara merawat ac", tone: "Educational", stage: "AI Drafting", words: 640, aeoOptimized: true },
-  { id: "c4", title: "Air Purifier vs AC: Mana yang Kamu Butuhkan?", keyword: "air purifier terbaik", tone: "Neutral", stage: "AI Drafting", words: 410, aeoOptimized: true },
-  { id: "c5", title: "Panasonic Authorized Service Center: Kenapa Penting", keyword: "service ac panasonic", tone: "Trustworthy", stage: "Review", words: 1180, aeoOptimized: true },
-  { id: "c6", title: "Harga & Spesifikasi Dishwasher Panasonic Terbaru", keyword: "dishwasher panasonic", tone: "Informative", stage: "Published", words: 1420, aeoOptimized: true },
-];
-
-// ---------------------------------------------------------------------------
 // Technical & Indexing
 // ---------------------------------------------------------------------------
 export interface CwvMetric {
