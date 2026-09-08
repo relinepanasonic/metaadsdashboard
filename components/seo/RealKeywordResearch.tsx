@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Search, Trophy } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Search, Trophy, Sparkles, ArrowUpDown, ArrowUp, ArrowDown, ExternalLink } from "lucide-react";
 import Panel from "@/components/Panel";
 import { formatNumber } from "@/lib/format";
 
@@ -18,6 +18,11 @@ interface SerpResult {
   url: string;
 }
 
+type SortKey = "volume" | "difficulty" | "cpcUsd";
+type SortDir = "asc" | "desc";
+
+const INTENTS = ["Transactional", "Commercial", "Informational", "Navigational"];
+
 function kdColor(kd: number): string {
   if (kd < 30) return "#34d399";
   if (kd < 50) return "#22d3ee";
@@ -32,38 +37,88 @@ const INTENT_CLS: Record<string, string> = {
   Navigational: "bg-amber-500/15 text-amber-300",
 };
 
-export default function RealKeywordResearch({ defaultSeed }: { defaultSeed: string }) {
-  const [seed, setSeed] = useState(defaultSeed);
-  const [query, setQuery] = useState(defaultSeed);
+// A "quick win" = real search demand with low competition — the best ROI target.
+function isQuickWin(k: KeywordIdea): boolean {
+  return k.volume >= 300 && k.difficulty <= 30;
+}
+
+export default function RealKeywordResearch({ suggestions = [] }: { suggestions?: string[] }) {
+  const [seed, setSeed] = useState("");
+  const [query, setQuery] = useState("");
   const [ideas, setIdeas] = useState<KeywordIdea[]>([]);
-  const [serp, setSerp] = useState<SerpResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  const [serp, setSerp] = useState<SerpResult[]>([]);
+  const [serpKeyword, setSerpKeyword] = useState("");
+  const [serpLoading, setSerpLoading] = useState(false);
+
+  const [sortKey, setSortKey] = useState<SortKey>("volume");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [intentFilter, setIntentFilter] = useState<string>("All");
+  const [tableFilter, setTableFilter] = useState("");
 
   async function analyze(kw: string) {
     if (!kw.trim()) return;
     setLoading(true);
     setError("");
     setQuery(kw);
+    setIntentFilter("All");
+    setTableFilter("");
     try {
-      const [kRes, sRes] = await Promise.all([
-        fetch(`/api/seo/research/keywords?seed=${encodeURIComponent(kw)}`, { cache: "no-store" }).then((r) => r.json()),
-        fetch(`/api/seo/research/serp?keyword=${encodeURIComponent(kw)}`, { cache: "no-store" }).then((r) => r.json()),
-      ]);
+      const kRes = await fetch(`/api/seo/research/keywords?seed=${encodeURIComponent(kw)}`, { cache: "no-store" }).then((r) => r.json());
       if (kRes.ok) setIdeas(kRes.keywords);
       else setError(kRes.error || "Failed to load keyword ideas.");
-      if (sRes.ok) setSerp(sRes.results);
     } catch (err) {
       setError((err as Error).message);
     } finally {
       setLoading(false);
     }
+    // Also pull the SERP for the seed itself, as a starting point.
+    viewSerp(kw);
   }
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => {
-    analyze(defaultSeed);
-  }, []);
+  async function viewSerp(kw: string) {
+    setSerpKeyword(kw);
+    setSerpLoading(true);
+    try {
+      const sRes = await fetch(`/api/seo/research/serp?keyword=${encodeURIComponent(kw)}`, { cache: "no-store" }).then((r) => r.json());
+      if (sRes.ok) setSerp(sRes.results);
+    } catch {
+      // Non-fatal — keyword table still works even if this one SERP call fails.
+    } finally {
+      setSerpLoading(false);
+    }
+  }
+
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) setSortDir((d) => (d === "desc" ? "asc" : "desc"));
+    else {
+      setSortKey(key);
+      setSortDir("desc");
+    }
+  }
+
+  const visibleIdeas = useMemo(() => {
+    let rows = ideas;
+    if (intentFilter !== "All") rows = rows.filter((k) => k.intent === intentFilter);
+    if (tableFilter) rows = rows.filter((k) => k.keyword.toLowerCase().includes(tableFilter.toLowerCase()));
+    return [...rows].sort((a, b) => (sortDir === "desc" ? b[sortKey] - a[sortKey] : a[sortKey] - b[sortKey]));
+  }, [ideas, intentFilter, tableFilter, sortKey, sortDir]);
+
+  const quickWinCount = useMemo(() => ideas.filter(isQuickWin).length, [ideas]);
+
+  function SortHeader({ label, sk }: { label: string; sk: SortKey }) {
+    const active = sortKey === sk;
+    return (
+      <th className="px-3 py-2.5 text-right font-semibold">
+        <button onClick={() => toggleSort(sk)} className="inline-flex items-center gap-1 hover:text-slate-200">
+          {label}
+          {active ? sortDir === "desc" ? <ArrowDown size={11} /> : <ArrowUp size={11} /> : <ArrowUpDown size={11} className="opacity-40" />}
+        </button>
+      </th>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -82,13 +137,31 @@ export default function RealKeywordResearch({ defaultSeed }: { defaultSeed: stri
           </div>
           <button
             onClick={() => analyze(seed)}
-            disabled={loading}
+            disabled={loading || !seed.trim()}
             className="flex items-center gap-2 rounded-lg bg-cyan-500/15 px-5 py-2.5 text-sm font-semibold text-cyan-300 hover:bg-cyan-500/25 disabled:opacity-50"
             style={{ boxShadow: "inset 0 0 0 1px rgba(34,211,238,0.4)" }}
           >
             <Search size={15} /> {loading ? "Analyzing…" : "Analyze"}
           </button>
         </div>
+
+        {suggestions.length > 0 && (
+          <div className="mt-3 flex flex-wrap items-center gap-1.5">
+            <span className="text-[10px] uppercase tracking-wider text-slate-500">Try one of your real queries:</span>
+            {suggestions.map((s) => (
+              <button
+                key={s}
+                onClick={() => {
+                  setSeed(s);
+                  analyze(s);
+                }}
+                className="rounded-md bg-white/[0.05] px-2.5 py-1 text-[11px] font-medium text-slate-300 hover:bg-cyan-500/15 hover:text-cyan-300"
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {error && (
@@ -97,101 +170,163 @@ export default function RealKeywordResearch({ defaultSeed }: { defaultSeed: stri
         </div>
       )}
 
+      {!query && !loading && !error && (
+        <div className="glass-panel p-8 text-center text-xs text-slate-500">
+          Type a seed keyword above (or click a suggestion) to pull real search volume, difficulty, and competitor rankings.
+        </div>
+      )}
+
       {/* Keyword ideas */}
-      <div className="glass-panel p-4 sm:p-5">
-        <div className="mb-3 flex items-center gap-2">
-          <h3 className="text-sm font-semibold text-slate-100">Keyword Ideas for &quot;{query}&quot;</h3>
-          <span className="rounded-md bg-cyan-500/10 px-2 py-0.5 text-[10px] font-semibold text-cyan-300">{ideas.length} keywords</span>
-          <span className="text-[10px] text-slate-500">· real data via DataForSEO</span>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[720px] border-collapse text-xs">
-            <thead>
-              <tr className="text-left text-[10px] uppercase tracking-wider text-slate-500">
-                <th className="px-3 py-2.5 font-semibold">Keyword</th>
-                <th className="px-3 py-2.5 font-semibold">Intent</th>
-                <th className="px-3 py-2.5 text-right font-semibold">Volume</th>
-                <th className="px-3 py-2.5 text-right font-semibold">Difficulty</th>
-                <th className="px-3 py-2.5 text-right font-semibold">CPC (USD)</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr>
-                  <td colSpan={5} className="px-3 py-6 text-center text-slate-500">Loading…</td>
+      {(query || loading) && (
+        <div className="glass-panel p-4 sm:p-5">
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <h3 className="text-sm font-semibold text-slate-100">Keyword Ideas for &quot;{query}&quot;</h3>
+            <span className="rounded-md bg-cyan-500/10 px-2 py-0.5 text-[10px] font-semibold text-cyan-300">
+              {visibleIdeas.length} of {ideas.length}
+            </span>
+            {quickWinCount > 0 && (
+              <span className="inline-flex items-center gap-1 rounded-md bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">
+                <Sparkles size={10} /> {quickWinCount} quick win{quickWinCount === 1 ? "" : "s"}
+              </span>
+            )}
+            <span className="text-[10px] text-slate-500">· real data via DataForSEO</span>
+
+            {/* Intent filter */}
+            <div className="ml-auto flex flex-wrap items-center gap-1.5">
+              {["All", ...INTENTS].map((i) => (
+                <button
+                  key={i}
+                  onClick={() => setIntentFilter(i)}
+                  className={`rounded-md px-2 py-1 text-[10px] font-semibold transition-colors ${
+                    intentFilter === i ? "bg-cyan-500/20 text-cyan-300" : "bg-white/[0.04] text-slate-400 hover:bg-white/[0.08]"
+                  }`}
+                >
+                  {i}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <input
+            value={tableFilter}
+            onChange={(e) => setTableFilter(e.target.value)}
+            placeholder="Filter these results…"
+            className="mb-3 w-full max-w-xs rounded-lg border border-white/[0.12] bg-[#0b0e14] px-3 py-1.5 text-xs text-slate-100 placeholder:text-slate-600 focus:border-cyan-500/50 focus:outline-none"
+          />
+
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[760px] border-collapse text-xs">
+              <thead>
+                <tr className="text-left text-[10px] uppercase tracking-wider text-slate-500">
+                  <th className="px-3 py-2.5 font-semibold">Keyword</th>
+                  <th className="px-3 py-2.5 font-semibold">Intent</th>
+                  <SortHeader label="Volume" sk="volume" />
+                  <SortHeader label="Difficulty" sk="difficulty" />
+                  <SortHeader label="CPC (USD)" sk="cpcUsd" />
+                  <th className="px-3 py-2.5 text-right font-semibold">SERP</th>
                 </tr>
-              ) : ideas.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="px-3 py-6 text-center text-slate-500">No results yet — try a different seed keyword.</td>
-                </tr>
-              ) : (
-                ideas.map((k) => (
-                  <tr key={k.keyword} className="border-t border-white/[0.05] hover:bg-white/[0.02]">
-                    <td className="px-3 py-2.5 font-medium text-slate-100">{k.keyword}</td>
-                    <td className="px-3 py-2.5">
-                      <span className={`rounded-md px-2 py-0.5 text-[10px] font-semibold ${INTENT_CLS[k.intent] ?? "bg-white/[0.06] text-slate-300"}`}>
-                        {k.intent}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2.5 text-right text-slate-200">{formatNumber(k.volume)}</td>
-                    <td className="px-3 py-2.5 text-right">
-                      <span className="inline-flex items-center gap-1.5">
-                        <span className="h-1.5 w-8 overflow-hidden rounded-full bg-white/[0.08]">
-                          <span className="block h-full rounded-full" style={{ width: `${k.difficulty}%`, background: kdColor(k.difficulty) }} />
-                        </span>
-                        <span className="font-semibold" style={{ color: kdColor(k.difficulty) }}>{k.difficulty}</span>
-                      </span>
-                    </td>
-                    <td className="px-3 py-2.5 text-right text-slate-300">${k.cpcUsd.toFixed(2)}</td>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr>
+                    <td colSpan={6} className="px-3 py-6 text-center text-slate-500">Loading…</td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                ) : visibleIdeas.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-3 py-6 text-center text-slate-500">No results match the current filters.</td>
+                  </tr>
+                ) : (
+                  visibleIdeas.map((k) => (
+                    <tr key={k.keyword} className="border-t border-white/[0.05] hover:bg-white/[0.02]">
+                      <td className="px-3 py-2.5 font-medium text-slate-100">
+                        <div className="flex items-center gap-1.5">
+                          {k.keyword}
+                          {isQuickWin(k) && (
+                            <span title="High volume, low difficulty" className="inline-flex items-center gap-0.5 rounded-md bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-bold uppercase text-emerald-300">
+                              <Sparkles size={9} /> Quick Win
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <span className={`rounded-md px-2 py-0.5 text-[10px] font-semibold ${INTENT_CLS[k.intent] ?? "bg-white/[0.06] text-slate-300"}`}>
+                          {k.intent}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2.5 text-right text-slate-200">{formatNumber(k.volume)}</td>
+                      <td className="px-3 py-2.5 text-right">
+                        <span className="inline-flex items-center gap-1.5">
+                          <span className="h-1.5 w-8 overflow-hidden rounded-full bg-white/[0.08]">
+                            <span className="block h-full rounded-full" style={{ width: `${k.difficulty}%`, background: kdColor(k.difficulty) }} />
+                          </span>
+                          <span className="font-semibold" style={{ color: kdColor(k.difficulty) }}>{k.difficulty}</span>
+                        </span>
+                      </td>
+                      <td className="px-3 py-2.5 text-right text-slate-300">${k.cpcUsd.toFixed(2)}</td>
+                      <td className="px-3 py-2.5 text-right">
+                        <button
+                          onClick={() => viewSerp(k.keyword)}
+                          className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-semibold ${
+                            serpKeyword === k.keyword ? "bg-cyan-500/20 text-cyan-300" : "bg-white/[0.05] text-slate-400 hover:bg-white/[0.1] hover:text-slate-200"
+                          }`}
+                        >
+                          <ExternalLink size={10} /> View
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Competitor SERP */}
-      <Panel
-        title="Competitor SERP — top 10"
-        subtitle={`Live Google ranking for &quot;${query}&quot;`}
-        right={<Trophy size={16} className="text-amber-400" />}
-      >
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[480px] border-collapse text-xs">
-            <thead>
-              <tr className="text-left text-[10px] uppercase tracking-wider text-slate-500">
-                <th className="px-3 py-2.5 font-semibold">#</th>
-                <th className="px-3 py-2.5 font-semibold">URL</th>
-              </tr>
-            </thead>
-            <tbody>
-              {serp.length === 0 ? (
-                <tr>
-                  <td colSpan={2} className="px-3 py-6 text-center text-slate-500">
-                    {loading ? "Loading…" : "No SERP data yet."}
-                  </td>
+      {serpKeyword && (
+        <Panel
+          title="Competitor SERP — top 10"
+          subtitle={`Live Google ranking for &quot;${serpKeyword}&quot;`}
+          right={<Trophy size={16} className="text-amber-400" />}
+        >
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[480px] border-collapse text-xs">
+              <thead>
+                <tr className="text-left text-[10px] uppercase tracking-wider text-slate-500">
+                  <th className="px-3 py-2.5 font-semibold">#</th>
+                  <th className="px-3 py-2.5 font-semibold">URL</th>
                 </tr>
-              ) : (
-                serp.map((r) => (
-                  <tr key={r.rank} className="border-t border-white/[0.05] hover:bg-white/[0.02]">
-                    <td className="px-3 py-2.5">
-                      <span
-                        className={`grid h-6 w-6 place-items-center rounded-md text-[11px] font-bold ${
-                          r.rank <= 3 ? "bg-cyan-500/15 text-cyan-300" : "bg-white/[0.05] text-slate-400"
-                        }`}
-                      >
-                        {r.rank}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2.5 font-medium text-slate-200">{r.url}</td>
+              </thead>
+              <tbody>
+                {serpLoading ? (
+                  <tr>
+                    <td colSpan={2} className="px-3 py-6 text-center text-slate-500">Loading…</td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </Panel>
+                ) : serp.length === 0 ? (
+                  <tr>
+                    <td colSpan={2} className="px-3 py-6 text-center text-slate-500">No SERP data yet.</td>
+                  </tr>
+                ) : (
+                  serp.map((r) => (
+                    <tr key={r.rank} className="border-t border-white/[0.05] hover:bg-white/[0.02]">
+                      <td className="px-3 py-2.5">
+                        <span
+                          className={`grid h-6 w-6 place-items-center rounded-md text-[11px] font-bold ${
+                            r.rank <= 3 ? "bg-cyan-500/15 text-cyan-300" : "bg-white/[0.05] text-slate-400"
+                          }`}
+                        >
+                          {r.rank}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2.5 font-medium text-slate-200">{r.url}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Panel>
+      )}
     </div>
   );
 }

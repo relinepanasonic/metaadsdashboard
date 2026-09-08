@@ -106,7 +106,7 @@ export default function ResearchPage() {
 
       {/* Keyword research + competitor SERP — DataForSEO */}
       {dfConfigured ? (
-        <RealKeywordResearch defaultSeed="panasonic ac" />
+        <RealKeywordResearch suggestions={queries.slice(0, 6).map((q) => q.query)} />
       ) : dfConfigured === false ? (
         <>
           <div className="glass-panel flex flex-wrap items-center gap-3 p-4" style={{ boxShadow: "inset 0 0 0 1px rgba(251,191,36,0.3)" }}>
