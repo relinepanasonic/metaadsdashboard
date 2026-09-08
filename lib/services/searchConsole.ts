@@ -135,6 +135,41 @@ export async function fetchSearchAnalytics(
   }));
 }
 
+export interface QueryRow {
+  query: string;
+  clicks: number;
+  impressions: number;
+  ctr: number;
+  position: number;
+}
+
+// Real queries your site already gets impressions for (used by the Research
+// tab). This is NOT keyword research (no search volume / difficulty — GSC
+// doesn't expose that for terms you don't already rank on); it's an honest
+// "what are people actually finding you for" view.
+export async function fetchTopQueries(
+  siteUrl: string,
+  startDate: string,
+  endDate: string,
+  rowLimit = 250
+): Promise<QueryRow[]> {
+  const json = await gscFetch<{ rows?: Array<{ keys: string[]; clicks: number; impressions: number; ctr: number; position: number }> }>(
+    `/sites/${encodeURIComponent(siteUrl)}/searchAnalytics/query`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        startDate,
+        endDate,
+        dimensions: ["query"],
+        rowLimit,
+      }),
+    }
+  );
+  return (json.rows ?? [])
+    .map((r) => ({ query: r.keys[0], clicks: r.clicks, impressions: r.impressions, ctr: r.ctr, position: r.position }))
+    .sort((a, b) => b.clicks - a.clicks || b.impressions - a.impressions);
+}
+
 export interface IndexCoverageSummary {
   indexed: number;
   notIndexed: number;
