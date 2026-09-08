@@ -266,3 +266,46 @@ export async function fetchKeywordGap(yourDomain: string, competitorDomain: stri
     }))
     .sort((a, b) => b.volume - a.volume);
 }
+
+export interface RankedKeyword {
+  keyword: string;
+  volume: number;
+  difficulty: number;
+  position: number;
+  url: string;
+}
+
+interface RankedKeywordsResult {
+  items?: Array<{
+    keyword_data?: { keyword?: string; keyword_info?: { search_volume?: number } };
+    ranked_serp_element?: {
+      keyword_difficulty?: number;
+      serp_item?: { rank_absolute?: number; url?: string };
+    } | null;
+  }>;
+}
+
+// Every real keyword a domain (yours or a competitor's) ranks for in Google,
+// with volume and position — the full picture, not just the gap.
+export async function fetchRankedKeywords(domain: string, limit = 50): Promise<RankedKeyword[]> {
+  const results = await dfsPost<RankedKeywordsResult>("/dataforseo_labs/google/ranked_keywords/live", [
+    {
+      target: bareDomain(domain),
+      location_code: LOCATION_CODE,
+      language_code: LANGUAGE_CODE,
+      limit,
+      order_by: ["keyword_data.keyword_info.search_volume,desc"],
+    },
+  ]);
+
+  const items = results[0]?.items ?? [];
+  return items
+    .filter((it) => it.keyword_data?.keyword && it.ranked_serp_element?.serp_item)
+    .map((it) => ({
+      keyword: it.keyword_data!.keyword as string,
+      volume: it.keyword_data?.keyword_info?.search_volume ?? 0,
+      difficulty: Math.round(it.ranked_serp_element?.keyword_difficulty ?? 0),
+      position: it.ranked_serp_element!.serp_item!.rank_absolute ?? 0,
+      url: (it.ranked_serp_element!.serp_item!.url ?? "").replace(/^https?:\/\//, ""),
+    }));
+}

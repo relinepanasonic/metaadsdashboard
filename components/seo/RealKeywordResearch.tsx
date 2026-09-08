@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Search, Trophy, Sparkles, ArrowUpDown, ArrowUp, ArrowDown, ExternalLink } from "lucide-react";
+import { Search, Trophy, Sparkles, ArrowUpDown, ArrowUp, ArrowDown, ExternalLink, Bookmark, BookmarkCheck } from "lucide-react";
 import Panel from "@/components/Panel";
 import { formatNumber } from "@/lib/format";
 
@@ -42,7 +42,25 @@ function isQuickWin(k: KeywordIdea): boolean {
   return k.volume >= 300 && k.difficulty <= 30;
 }
 
-export default function RealKeywordResearch({ suggestions = [] }: { suggestions?: string[] }) {
+interface SaveKeywordPayload {
+  keyword: string;
+  volume: number;
+  difficulty?: number;
+  cpcUsd?: number;
+  position?: number;
+  source: string;
+  context: string;
+}
+
+export default function RealKeywordResearch({
+  suggestions = [],
+  onSave,
+  isSaved,
+}: {
+  suggestions?: string[];
+  onSave: (payload: SaveKeywordPayload) => void;
+  isSaved: (keyword: string, source: string, context: string) => boolean;
+}) {
   const [seed, setSeed] = useState("");
   const [query, setQuery] = useState("");
   const [ideas, setIdeas] = useState<KeywordIdea[]>([]);
@@ -224,19 +242,22 @@ export default function RealKeywordResearch({ suggestions = [] }: { suggestions?
                   <SortHeader label="Difficulty" sk="difficulty" />
                   <SortHeader label="CPC (USD)" sk="cpcUsd" />
                   <th className="px-3 py-2.5 text-right font-semibold">SERP</th>
+                  <th className="px-3 py-2.5 text-right font-semibold">Save</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={6} className="px-3 py-6 text-center text-slate-500">Loading…</td>
+                    <td colSpan={7} className="px-3 py-6 text-center text-slate-500">Loading…</td>
                   </tr>
                 ) : visibleIdeas.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-3 py-6 text-center text-slate-500">No results match the current filters.</td>
+                    <td colSpan={7} className="px-3 py-6 text-center text-slate-500">No results match the current filters.</td>
                   </tr>
                 ) : (
-                  visibleIdeas.map((k) => (
+                  visibleIdeas.map((k) => {
+                    const saved = isSaved(k.keyword, "research", query);
+                    return (
                     <tr key={k.keyword} className="border-t border-white/[0.05] hover:bg-white/[0.02]">
                       <td className="px-3 py-2.5 font-medium text-slate-100">
                         <div className="flex items-center gap-1.5">
@@ -273,8 +294,21 @@ export default function RealKeywordResearch({ suggestions = [] }: { suggestions?
                           <ExternalLink size={10} /> View
                         </button>
                       </td>
+                      <td className="px-3 py-2.5 text-right">
+                        <button
+                          onClick={() =>
+                            !saved &&
+                            onSave({ keyword: k.keyword, volume: k.volume, difficulty: k.difficulty, cpcUsd: k.cpcUsd, source: "research", context: query })
+                          }
+                          disabled={saved}
+                          title={saved ? "Saved" : "Save keyword"}
+                          className={`rounded-md p-1.5 ${saved ? "text-cyan-400" : "text-slate-500 hover:bg-white/[0.08] hover:text-slate-200"}`}
+                        >
+                          {saved ? <BookmarkCheck size={13} /> : <Bookmark size={13} />}
+                        </button>
+                      </td>
                     </tr>
-                  ))
+                  );})
                 )}
               </tbody>
             </table>

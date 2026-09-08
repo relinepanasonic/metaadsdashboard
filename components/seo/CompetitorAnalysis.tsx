@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Users, Target, Swords, ArrowRight } from "lucide-react";
+import { Users, Target, Swords, ArrowRight, List, Bookmark, BookmarkCheck } from "lucide-react";
 import { formatNumber } from "@/lib/format";
 
 interface CompetitorDomain {
@@ -24,7 +24,33 @@ interface GapKeyword {
   competitorPosition: number;
 }
 
-export default function CompetitorAnalysis({ yourDomain }: { yourDomain: string }) {
+interface RankedKeyword {
+  keyword: string;
+  volume: number;
+  difficulty: number;
+  position: number;
+  url: string;
+}
+
+interface SaveKeywordPayload {
+  keyword: string;
+  volume: number;
+  difficulty?: number;
+  cpcUsd?: number;
+  position?: number;
+  source: string;
+  context: string;
+}
+
+export default function CompetitorAnalysis({
+  yourDomain,
+  onSave,
+  isSaved,
+}: {
+  yourDomain: string;
+  onSave: (payload: SaveKeywordPayload) => void;
+  isSaved: (keyword: string, source: string, context: string) => boolean;
+}) {
   const [domainInput, setDomainInput] = useState(yourDomain);
   const [competitors, setCompetitors] = useState<CompetitorDomain[]>([]);
   const [loadingCompetitors, setLoadingCompetitors] = useState(false);
@@ -38,6 +64,11 @@ export default function CompetitorAnalysis({ yourDomain }: { yourDomain: string 
   const [competitorOverview, setCompetitorOverview] = useState<DomainOverview | null>(null);
   const [gap, setGap] = useState<GapKeyword[]>([]);
   const [activeCompetitor, setActiveCompetitor] = useState("");
+
+  const [rankedDomain, setRankedDomain] = useState("");
+  const [rankedKeywords, setRankedKeywords] = useState<RankedKeyword[]>([]);
+  const [rankedLoading, setRankedLoading] = useState(false);
+  const [rankedError, setRankedError] = useState("");
 
   async function findCompetitors() {
     if (!domainInput.trim()) return;
@@ -76,6 +107,22 @@ export default function CompetitorAnalysis({ yourDomain }: { yourDomain: string 
       setCompareError((err as Error).message);
     } finally {
       setComparing(false);
+    }
+  }
+
+  async function viewKeywords(domain: string) {
+    if (!domain.trim()) return;
+    setRankedDomain(domain);
+    setRankedLoading(true);
+    setRankedError("");
+    try {
+      const res = await fetch(`/api/seo/research/ranked-keywords?domain=${encodeURIComponent(domain)}`, { cache: "no-store" }).then((r) => r.json());
+      if (res.ok) setRankedKeywords(res.keywords);
+      else setRankedError(res.error || "Failed to load ranked keywords.");
+    } catch (err) {
+      setRankedError((err as Error).message);
+    } finally {
+      setRankedLoading(false);
     }
   }
 
@@ -118,14 +165,14 @@ export default function CompetitorAnalysis({ yourDomain }: { yourDomain: string 
             Domains overlapping with <span className="text-cyan-300">{searchedDomain}</span>
           </h3>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[680px] border-collapse text-xs">
+            <table className="w-full min-w-[760px] border-collapse text-xs">
               <thead>
                 <tr className="text-left text-[10px] uppercase tracking-wider text-slate-500">
                   <th className="px-3 py-2.5 font-semibold">Domain</th>
                   <th className="px-3 py-2.5 text-right font-semibold">Shared Keywords</th>
                   <th className="px-3 py-2.5 text-right font-semibold">Their Organic Keywords</th>
                   <th className="px-3 py-2.5 text-right font-semibold">Est. Organic Traffic/mo</th>
-                  <th className="px-3 py-2.5 text-right font-semibold">Action</th>
+                  <th className="px-3 py-2.5 text-right font-semibold">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -141,12 +188,20 @@ export default function CompetitorAnalysis({ yourDomain }: { yourDomain: string 
                       <td className="px-3 py-2.5 text-right text-slate-300">{formatNumber(c.organicKeywords)}</td>
                       <td className="px-3 py-2.5 text-right text-slate-300">{formatNumber(c.organicTrafficEst)}</td>
                       <td className="px-3 py-2.5 text-right">
-                        <button
-                          onClick={() => analyzeGap(c.domain)}
-                          className="inline-flex items-center gap-1 rounded-md bg-white/[0.05] px-2.5 py-1 text-[10px] font-semibold text-slate-300 hover:bg-cyan-500/15 hover:text-cyan-300"
-                        >
-                          <Swords size={11} /> Find Gap <ArrowRight size={11} />
-                        </button>
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            onClick={() => viewKeywords(c.domain)}
+                            className="inline-flex items-center gap-1 rounded-md bg-white/[0.05] px-2.5 py-1 text-[10px] font-semibold text-slate-300 hover:bg-white/[0.1] hover:text-slate-100"
+                          >
+                            <List size={11} /> Keywords
+                          </button>
+                          <button
+                            onClick={() => analyzeGap(c.domain)}
+                            className="inline-flex items-center gap-1 rounded-md bg-white/[0.05] px-2.5 py-1 text-[10px] font-semibold text-slate-300 hover:bg-cyan-500/15 hover:text-cyan-300"
+                          >
+                            <Swords size={11} /> Find Gap <ArrowRight size={11} />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -170,6 +225,13 @@ export default function CompetitorAnalysis({ yourDomain }: { yourDomain: string 
             placeholder="competitordomain.com"
             className="min-w-[220px] flex-1 rounded-lg border border-white/[0.12] bg-[#0b0e14] px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-600 focus:border-cyan-500/50 focus:outline-none"
           />
+          <button
+            onClick={() => viewKeywords(manualCompetitor)}
+            disabled={!manualCompetitor.trim()}
+            className="flex items-center gap-2 rounded-lg bg-white/[0.05] px-4 py-2.5 text-sm font-semibold text-slate-300 hover:bg-white/[0.1] disabled:opacity-50"
+          >
+            <List size={15} /> Keywords
+          </button>
           <button
             onClick={() => analyzeGap(manualCompetitor)}
             disabled={comparing || !manualCompetitor.trim()}
@@ -227,31 +289,109 @@ export default function CompetitorAnalysis({ yourDomain }: { yourDomain: string 
             <span className="rounded-md bg-cyan-500/10 px-2 py-0.5 text-[10px] font-semibold text-cyan-300">{gap.length} keywords</span>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[480px] border-collapse text-xs">
+            <table className="w-full min-w-[560px] border-collapse text-xs">
               <thead>
                 <tr className="text-left text-[10px] uppercase tracking-wider text-slate-500">
                   <th className="px-3 py-2.5 font-semibold">Keyword</th>
                   <th className="px-3 py-2.5 text-right font-semibold">Volume</th>
                   <th className="px-3 py-2.5 text-right font-semibold">Their Position</th>
+                  <th className="px-3 py-2.5 text-right font-semibold">Save</th>
                 </tr>
               </thead>
               <tbody>
                 {comparing ? (
                   <tr>
-                    <td colSpan={3} className="px-3 py-6 text-center text-slate-500">Loading…</td>
+                    <td colSpan={4} className="px-3 py-6 text-center text-slate-500">Loading…</td>
                   </tr>
                 ) : gap.length === 0 ? (
                   <tr>
-                    <td colSpan={3} className="px-3 py-6 text-center text-slate-500">No gap found — either they don&apos;t overlap much, or you already cover their keywords.</td>
+                    <td colSpan={4} className="px-3 py-6 text-center text-slate-500">No gap found — either they don&apos;t overlap much, or you already cover their keywords.</td>
                   </tr>
                 ) : (
-                  gap.map((g) => (
-                    <tr key={g.keyword} className="border-t border-white/[0.05] hover:bg-white/[0.02]">
-                      <td className="px-3 py-2.5 font-medium text-slate-100">{g.keyword}</td>
-                      <td className="px-3 py-2.5 text-right text-slate-300">{formatNumber(g.volume)}</td>
-                      <td className="px-3 py-2.5 text-right text-slate-300">#{g.competitorPosition}</td>
-                    </tr>
-                  ))
+                  gap.map((g) => {
+                    const saved = isSaved(g.keyword, "gap", activeCompetitor);
+                    return (
+                      <tr key={g.keyword} className="border-t border-white/[0.05] hover:bg-white/[0.02]">
+                        <td className="px-3 py-2.5 font-medium text-slate-100">{g.keyword}</td>
+                        <td className="px-3 py-2.5 text-right text-slate-300">{formatNumber(g.volume)}</td>
+                        <td className="px-3 py-2.5 text-right text-slate-300">#{g.competitorPosition}</td>
+                        <td className="px-3 py-2.5 text-right">
+                          <button
+                            onClick={() =>
+                              !saved &&
+                              onSave({ keyword: g.keyword, volume: g.volume, position: g.competitorPosition, source: "gap", context: activeCompetitor })
+                            }
+                            disabled={saved}
+                            title={saved ? "Saved" : "Save keyword"}
+                            className={`rounded-md p-1.5 ${saved ? "text-cyan-400" : "text-slate-500 hover:bg-white/[0.08] hover:text-slate-200"}`}
+                          >
+                            {saved ? <BookmarkCheck size={13} /> : <Bookmark size={13} />}
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Full ranked keywords for a domain */}
+      {rankedDomain && (
+        <div className="glass-panel p-4 sm:p-5">
+          <div className="mb-3 flex items-center gap-2">
+            <List size={16} className="text-slate-400" />
+            <h3 className="text-sm font-semibold text-slate-100">
+              Keywords <span className="text-cyan-300">{rankedDomain}</span> ranks for
+            </h3>
+            <span className="rounded-md bg-cyan-500/10 px-2 py-0.5 text-[10px] font-semibold text-cyan-300">{rankedKeywords.length}</span>
+          </div>
+          {rankedError && <div className="mb-3 text-xs text-rose-300">{rankedError}</div>}
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[640px] border-collapse text-xs">
+              <thead>
+                <tr className="text-left text-[10px] uppercase tracking-wider text-slate-500">
+                  <th className="px-3 py-2.5 font-semibold">Keyword</th>
+                  <th className="px-3 py-2.5 text-right font-semibold">Volume</th>
+                  <th className="px-3 py-2.5 text-right font-semibold">Their Position</th>
+                  <th className="px-3 py-2.5 text-right font-semibold">Save</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rankedLoading ? (
+                  <tr>
+                    <td colSpan={4} className="px-3 py-6 text-center text-slate-500">Loading…</td>
+                  </tr>
+                ) : rankedKeywords.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="px-3 py-6 text-center text-slate-500">No ranked keywords found.</td>
+                  </tr>
+                ) : (
+                  rankedKeywords.map((k) => {
+                    const saved = isSaved(k.keyword, "ranked", rankedDomain);
+                    return (
+                      <tr key={k.keyword} className="border-t border-white/[0.05] hover:bg-white/[0.02]">
+                        <td className="px-3 py-2.5 font-medium text-slate-100">{k.keyword}</td>
+                        <td className="px-3 py-2.5 text-right text-slate-300">{formatNumber(k.volume)}</td>
+                        <td className="px-3 py-2.5 text-right text-slate-300">#{k.position}</td>
+                        <td className="px-3 py-2.5 text-right">
+                          <button
+                            onClick={() =>
+                              !saved &&
+                              onSave({ keyword: k.keyword, volume: k.volume, difficulty: k.difficulty, position: k.position, source: "ranked", context: rankedDomain })
+                            }
+                            disabled={saved}
+                            title={saved ? "Saved" : "Save keyword"}
+                            className={`rounded-md p-1.5 ${saved ? "text-cyan-400" : "text-slate-500 hover:bg-white/[0.08] hover:text-slate-200"}`}
+                          >
+                            {saved ? <BookmarkCheck size={13} /> : <Bookmark size={13} />}
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>

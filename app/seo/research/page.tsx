@@ -10,6 +10,7 @@ import SerpTable from "@/components/seo/SerpTable";
 import RealQueryTable from "@/components/seo/RealQueryTable";
 import RealKeywordResearch from "@/components/seo/RealKeywordResearch";
 import CompetitorAnalysis from "@/components/seo/CompetitorAnalysis";
+import SavedKeywordsPanel, { type SavedKeyword } from "@/components/seo/SavedKeywordsPanel";
 import { keywordResults, serpTable } from "@/lib/seo/mock";
 import type { QueryRow } from "@/lib/services/searchConsole";
 
@@ -38,6 +39,55 @@ export default function ResearchPage() {
   const [loadingData, setLoadingData] = useState(false);
   const [filter, setFilter] = useState("");
   const [dfConfigured, setDfConfigured] = useState<boolean | null>(null);
+  const [savedKeywords, setSavedKeywords] = useState<SavedKeyword[]>([]);
+
+  useEffect(() => {
+    fetch("/api/seo/keywords/saved", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => j.ok && setSavedKeywords(j.keywords))
+      .catch(() => {});
+  }, []);
+
+  function isKeywordSaved(keyword: string, source: string, context: string): boolean {
+    return savedKeywords.some((k) => k.keyword === keyword && k.source === source && k.context === context);
+  }
+
+  async function saveKeyword(payload: {
+    keyword: string;
+    volume: number;
+    difficulty?: number;
+    cpcUsd?: number;
+    position?: number;
+    source: string;
+    context: string;
+  }) {
+    const res = await fetch("/api/seo/keywords/saved", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }).then((r) => r.json());
+    if (res.ok) {
+      setSavedKeywords((prev) => [
+        {
+          id: res.id,
+          keyword: payload.keyword,
+          volume: payload.volume ?? null,
+          difficulty: payload.difficulty ?? null,
+          cpc_usd: payload.cpcUsd ?? null,
+          position: payload.position ?? null,
+          source: payload.source,
+          context: payload.context,
+          created_at: new Date().toISOString(),
+        },
+        ...prev,
+      ]);
+    }
+  }
+
+  async function removeSavedKeyword(id: string) {
+    setSavedKeywords((prev) => prev.filter((k) => k.id !== id));
+    await fetch(`/api/seo/keywords/saved/${id}`, { method: "DELETE" });
+  }
 
   useEffect(() => {
     fetch("/api/seo/gsc/sites", { cache: "no-store" })
@@ -118,8 +168,9 @@ export default function ResearchPage() {
       {/* Keyword research + competitor SERP — DataForSEO */}
       {dfConfigured ? (
         <>
-          <RealKeywordResearch suggestions={queries.slice(0, 6).map((q) => q.query)} />
-          <CompetitorAnalysis yourDomain={sites[0] ? bareDomain(sites[0].site_url) : ""} />
+          <SavedKeywordsPanel keywords={savedKeywords} onRemove={removeSavedKeyword} />
+          <RealKeywordResearch suggestions={queries.slice(0, 6).map((q) => q.query)} onSave={saveKeyword} isSaved={isKeywordSaved} />
+          <CompetitorAnalysis yourDomain={sites[0] ? bareDomain(sites[0].site_url) : ""} onSave={saveKeyword} isSaved={isKeywordSaved} />
         </>
       ) : dfConfigured === false ? (
         <>
