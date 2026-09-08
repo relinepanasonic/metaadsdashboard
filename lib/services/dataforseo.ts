@@ -136,3 +136,113 @@ export async function fetchSerpTop10(keyword: string): Promise<SerpResult[]> {
       url: (it.url as string).replace(/^https?:\/\//, ""),
     }));
 }
+
+// Strips protocol / "sc-domain:" / "www." / trailing slash so a Search
+// Console site_url or a user-typed URL becomes a bare domain DataForSEO expects.
+export function bareDomain(input: string): string {
+  return input
+    .replace(/^sc-domain:/, "")
+    .replace(/^https?:\/\//, "")
+    .replace(/^www\./, "")
+    .replace(/\/$/, "")
+    .trim();
+}
+
+export interface DomainOverview {
+  domain: string;
+  organicKeywords: number;
+  organicTrafficEst: number;
+}
+
+interface DomainRankOverviewResult {
+  items?: Array<{ metrics?: { organic?: { count?: number; etv?: number } } }>;
+}
+
+// Ballpark organic footprint for a domain: how many keywords it ranks for,
+// and roughly how much monthly organic traffic that's worth.
+export async function fetchDomainRankOverview(domain: string): Promise<DomainOverview> {
+  const results = await dfsPost<DomainRankOverviewResult>("/dataforseo_labs/google/domain_rank_overview/live", [
+    { target: bareDomain(domain), location_code: LOCATION_CODE, language_code: LANGUAGE_CODE },
+  ]);
+  const item = results[0]?.items?.[0];
+  return {
+    domain: bareDomain(domain),
+    organicKeywords: item?.metrics?.organic?.count ?? 0,
+    organicTrafficEst: Math.round(item?.metrics?.organic?.etv ?? 0),
+  };
+}
+
+export interface CompetitorDomain {
+  domain: string;
+  avgPosition: number;
+  intersections: number;
+  organicKeywords: number;
+  organicTrafficEst: number;
+}
+
+interface CompetitorsDomainResult {
+  items?: Array<{
+    domain: string;
+    avg_position?: number;
+    intersections?: number;
+    metrics?: { organic?: { count?: number; etv?: number } };
+  }>;
+}
+
+// Auto-discovers domains that overlap with yours the most in Google rankings
+// — the real answer to "who are my competitors", no guessing required.
+export async function fetchCompetitorsDomain(domain: string, limit = 10): Promise<CompetitorDomain[]> {
+  const results = await dfsPost<CompetitorsDomainResult>("/dataforseo_labs/google/competitors_domain/live", [
+    { target: bareDomain(domain), location_code: LOCATION_CODE, language_code: LANGUAGE_CODE, limit },
+  ]);
+
+  const items = results[0]?.items ?? [];
+  return items
+    .filter((it) => it.domain)
+    .map((it) => ({
+      domain: it.domain,
+      avgPosition: Math.round((it.avg_position ?? 0) * 10) / 10,
+      intersections: it.intersections ?? 0,
+      organicKeywords: it.metrics?.organic?.count ?? 0,
+      organicTrafficEst: Math.round(it.metrics?.organic?.etv ?? 0),
+    }));
+}
+
+export interface GapKeyword {
+  keyword: string;
+  volume: number;
+  competitorPosition: number;
+}
+
+interface DomainIntersectionResult {
+  items?: Array<{
+    keyword_data?: { keyword?: string; keyword_info?: { search_volume?: number } };
+    first_domain_serp_element?: { serp_item?: { rank_absolute?: number } } | null;
+    second_domain_serp_element?: { serp_item?: { rank_absolute?: number } } | null;
+  }>;
+}
+
+// The content gap: real keywords the competitor ranks for that your domain
+// currently does not. target1 = competitor, target2 = you.
+export async function fetchKeywordGap(yourDomain: string, competitorDomain: string, limit = 50): Promise<GapKeyword[]> {
+  const results = await dfsPost<DomainIntersectionResult>("/dataforseo_labs/google/domain_intersection/live", [
+    {
+      target1: bareDomain(competitorDomain),
+      target2: bareDomain(yourDomain),
+      location_code: LOCATION_CODE,
+      language_code: LANGUAGE_CODE,
+      limit,
+      intersections: false, // false = union of both domains' rankings, not just overlap
+    },
+  ]);
+
+  const items = results[0]?.items ?? [];
+  return items
+    .filter((it) => it.keyword_data?.keyword && it.first_domain_serp_element?.serp_item && !it.second_domain_serp_element?.serp_item)
+    .map((it) => ({
+      keyword: it.keyword_data!.keyword as string,
+      volume: it.keyword_data?.keyword_info?.search_volume ?? 0,
+      competitorPosition: it.first_domain_serp_element!.serp_item!.rank_absolute ?? 0,
+    }))
+    .sort((a, b) => b.volume - a.volume);
+}

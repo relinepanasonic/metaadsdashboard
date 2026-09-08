@@ -9,6 +9,7 @@ import KeywordResearch from "@/components/seo/KeywordResearch";
 import SerpTable from "@/components/seo/SerpTable";
 import RealQueryTable from "@/components/seo/RealQueryTable";
 import RealKeywordResearch from "@/components/seo/RealKeywordResearch";
+import CompetitorAnalysis from "@/components/seo/CompetitorAnalysis";
 import { keywordResults, serpTable } from "@/lib/seo/mock";
 import type { QueryRow } from "@/lib/services/searchConsole";
 
@@ -17,6 +18,16 @@ interface SiteConnection {
   site_url: string;
   label: string;
   status: "pending" | "connected" | "error";
+}
+
+// Strips "sc-domain:" / protocol / trailing slash so a Search Console
+// site_url becomes a bare domain to prefill the competitor-analysis input.
+function bareDomain(input: string): string {
+  return input
+    .replace(/^sc-domain:/, "")
+    .replace(/^https?:\/\//, "")
+    .replace(/\/$/, "")
+    .trim();
 }
 
 export default function ResearchPage() {
@@ -106,7 +117,10 @@ export default function ResearchPage() {
 
       {/* Keyword research + competitor SERP — DataForSEO */}
       {dfConfigured ? (
-        <RealKeywordResearch suggestions={queries.slice(0, 6).map((q) => q.query)} />
+        <>
+          <RealKeywordResearch suggestions={queries.slice(0, 6).map((q) => q.query)} />
+          <CompetitorAnalysis yourDomain={sites[0] ? bareDomain(sites[0].site_url) : ""} />
+        </>
       ) : dfConfigured === false ? (
         <>
           <div className="glass-panel flex flex-wrap items-center gap-3 p-4" style={{ boxShadow: "inset 0 0 0 1px rgba(251,191,36,0.3)" }}>
