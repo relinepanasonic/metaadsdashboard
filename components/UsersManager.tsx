@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   UserPlus, Copy, Ban, RotateCcw, KeyRound, Check, Loader2, ShieldCheck, Megaphone,
-  UserRound as ClientIcon, Building2, Mail, Pencil, Trash2, X,
+  UserRound as ClientIcon, Building2, Mail, Pencil, Trash2, X, Crown,
 } from "lucide-react";
 import CustomSelect from "./CustomSelect";
 import type { MetaAccount } from "@/lib/services/types";
@@ -18,7 +18,7 @@ interface AppUserRow {
   id: string;
   username: string;
   email: string;
-  role: "superadmin" | "advertiser" | "client";
+  role: "founder" | "superadmin" | "advertiser" | "client";
   client_name: string | null;
   adAccountIds: string[];
   created_at: string;
@@ -35,12 +35,13 @@ interface InviteRow {
 }
 
 const ROLE_BADGE: Record<string, { icon: typeof ShieldCheck; cls: string }> = {
+  founder: { icon: Crown, cls: "bg-amber-500/15 text-amber-300" },
   superadmin: { icon: ShieldCheck, cls: "bg-violet-500/15 text-violet-300" },
   advertiser: { icon: Megaphone, cls: "bg-cyan-500/15 text-cyan-300" },
   client: { icon: ClientIcon, cls: "bg-emerald-500/15 text-emerald-300" },
 };
 
-export default function UsersManager({ myRole }: { myRole: string }) {
+export default function UsersManager({ myRole, myId }: { myRole: string; myId: string }) {
   const [users, setUsers] = useState<AppUserRow[]>([]);
   const [invites, setInvites] = useState<InviteRow[]>([]);
   const [accounts, setAccounts] = useState<MetaAccount[]>([]);
@@ -58,6 +59,7 @@ export default function UsersManager({ myRole }: { myRole: string }) {
   const [savingClient, setSavingClient] = useState(false);
   const [clientError, setClientError] = useState<string | null>(null);
   const [deletingClient, setDeletingClient] = useState<string | null>(null);
+  const [deletingUser, setDeletingUser] = useState<string | null>(null);
 
   // New-invite form state
   const [newRole, setNewRole] = useState<"superadmin" | "advertiser" | "client">("client");
@@ -196,12 +198,26 @@ export default function UsersManager({ myRole }: { myRole: string }) {
   }
 
   async function sendReset(email: string) {
-    await fetch("/api/users/reset-password", {
+    const res = await fetch("/api/users/reset-password", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email }),
     });
-    flash(`Reset link sent to ${email}`);
+    const json = await res.json();
+    flash(json.ok ? `Reset link sent to ${email}` : json.error);
+  }
+
+  async function deleteUser(id: string, username: string) {
+    if (!window.confirm(`Remove "${username}"? They'll lose access immediately. This can't be undone.`)) return;
+    setDeletingUser(id);
+    try {
+      const res = await fetch(`/api/users/${id}`, { method: "DELETE" });
+      const json = await res.json();
+      flash(json.ok ? `"${username}" removed.` : json.error);
+      if (json.ok) loadAll();
+    } finally {
+      setDeletingUser(null);
+    }
   }
 
   const clientOptions = useMemo(
@@ -209,7 +225,7 @@ export default function UsersManager({ myRole }: { myRole: string }) {
     [clients]
   );
 
-  const canInviteAdvertiser = myRole === "superadmin";
+  const canInviteAdvertiser = myRole === "founder" || myRole === "superadmin";
 
   return (
     <div className="flex flex-col gap-5">
@@ -448,12 +464,24 @@ export default function UsersManager({ myRole }: { myRole: string }) {
                       → {u.adAccountIds.map((id) => accounts.find((a) => a.id === id)?.name ?? id).join(", ")}
                     </span>
                   )}
-                  <button
-                    onClick={() => sendReset(u.email)}
-                    className="ml-auto flex items-center gap-1 rounded-md bg-white/[0.05] px-2 py-1 text-[11px] text-slate-300 hover:bg-white/[0.1]"
-                  >
-                    <KeyRound size={11} /> Send reset link
-                  </button>
+                  <div className="ml-auto flex items-center gap-1.5">
+                    <button
+                      onClick={() => sendReset(u.email)}
+                      className="flex items-center gap-1 rounded-md bg-white/[0.05] px-2 py-1 text-[11px] text-slate-300 hover:bg-white/[0.1]"
+                    >
+                      <KeyRound size={11} /> Send reset link
+                    </button>
+                    {u.role !== "founder" && u.id !== myId && (
+                      <button
+                        onClick={() => deleteUser(u.id, u.username)}
+                        disabled={deletingUser === u.id}
+                        className="flex items-center gap-1 rounded-md bg-rose-500/10 px-2 py-1 text-[11px] text-rose-300 hover:bg-rose-500/20 disabled:opacity-50"
+                      >
+                        {deletingUser === u.id ? <Loader2 size={11} className="animate-spin" /> : <Trash2 size={11} />}
+                        Remove
+                      </button>
+                    )}
+                  </div>
                 </div>
               );
             })}

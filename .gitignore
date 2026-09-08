@@ -32,3 +32,5 @@ next-env.d.ts
 # secrets - never commit
 anon.txt
 *.txt
+
+.env*

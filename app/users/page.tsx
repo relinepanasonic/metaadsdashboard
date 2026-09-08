@@ -10,7 +10,7 @@ export default async function UsersPage() {
 
   return (
     <PagePlaceholder icon={UsersIcon} title="Users & Access" subtitle="Invite staff and clients, manage roles">
-      <UsersManager myRole={me.role} />
+      <UsersManager myRole={me.role} myId={me.id} />
     </PagePlaceholder>
   );
 }

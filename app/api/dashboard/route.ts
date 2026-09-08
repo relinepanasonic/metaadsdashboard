@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUnifiedDashboardData, type Platform } from "@/lib/services/dashboard";
 import { ACCOUNT_IDS } from "@/lib/services/metaCampaigns";
-import { getCurrentUser } from "@/lib/auth/currentUser";
+import { getCurrentUser, hasFullAccess } from "@/lib/auth/currentUser";
 
 export async function GET(req: NextRequest) {
   const me = await getCurrentUser();
@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "Use /api/meta/my-campaigns" }, { status: 403 });
   }
 
-  const permitted = me.role === "superadmin" ? ACCOUNT_IDS : me.adAccountIds;
+  const permitted = hasFullAccess(me.role) ? ACCOUNT_IDS : me.adAccountIds;
 
   // Optional ?accounts=id1,id2 narrows the permitted set further (e.g. a
   // Business filter on the frontend). Anything outside `permitted` is dropped.

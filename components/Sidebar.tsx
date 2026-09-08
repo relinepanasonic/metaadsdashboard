@@ -30,10 +30,11 @@ interface NavItem {
 
 interface Me {
   username: string;
-  role: "superadmin" | "advertiser" | "client";
+  role: "founder" | "superadmin" | "advertiser" | "client";
 }
 
 const ROLE_LABEL: Record<string, string> = {
+  founder: "Founder",
   superadmin: "Superadmin",
   advertiser: "Advertiser",
   client: "Client",

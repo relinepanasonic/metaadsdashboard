@@ -23,9 +23,6 @@ export default async function SeoLayout({ children }: { children: React.ReactNod
           </h1>
           <p className="text-xs text-slate-500">Organic search + Generative Engine Optimization, wired to your paid Meta data</p>
         </div>
-        <span className="ml-auto rounded-full bg-amber-500/15 px-3 py-1 text-[11px] font-bold uppercase text-amber-400">
-          Mock Data
-        </span>
       </div>
 
       <SeoTabs />

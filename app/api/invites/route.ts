@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/supabase/db";
-import { getCurrentUser } from "@/lib/auth/currentUser";
+import { getCurrentUser, hasFullAccess } from "@/lib/auth/currentUser";
 
 // List invites the current user is allowed to see.
 export async function GET() {
@@ -27,7 +27,10 @@ export async function POST(req: NextRequest) {
 
   const { role, clientName, adAccountIds, label } = await req.json();
 
-  if ((role === "advertiser" || role === "superadmin") && me.role !== "superadmin") {
+  if (role === "founder") {
+    return NextResponse.json({ ok: false, error: "Founder cannot be invited — it's assigned directly." }, { status: 403 });
+  }
+  if ((role === "advertiser" || role === "superadmin") && !hasFullAccess(me.role)) {
     return NextResponse.json({ ok: false, error: "Only Superadmin can invite Advertisers or Superadmins." }, { status: 403 });
   }
   if (role === "client" && !clientName) {

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { PiggyBank, MousePointer2, Target, TrendingUp, Sparkles, Plug, Eye, Percent } from "lucide-react";
+import { PiggyBank, MousePointer2, Target, TrendingUp, Sparkles, Plug, Eye, Percent, Globe2, CalendarRange } from "lucide-react";
 import KpiCard from "@/components/KpiCard";
 import Panel from "@/components/Panel";
 import CustomSelect from "@/components/CustomSelect";
@@ -19,11 +19,24 @@ interface SiteConnection {
   status: "pending" | "connected" | "error";
 }
 
+interface DailyRow {
+  date: string;
+  clicks: number;
+  impressions: number;
+  ctr: number;
+  position: number;
+}
+
 interface AnalyticsResponse {
   site: { url: string; label: string };
-  daily: { date: string; clicks: number; impressions: number; ctr: number; position: number }[];
+  daily: DailyRow[];
   monthly: MonthlyRow[];
   coverage: { indexed: number; notIndexed: number };
+}
+
+function monthLabel(ym: string): string {
+  const [y, m] = ym.split("-").map(Number);
+  return new Date(y, m - 1, 1).toLocaleDateString("en-US", { month: "short", year: "numeric" });
 }
 
 export default function SeoDashboardPage() {
@@ -32,6 +45,9 @@ export default function SeoDashboardPage() {
   const [data, setData] = useState<AnalyticsResponse | null>(null);
   const [loadingSites, setLoadingSites] = useState(true);
   const [loadingData, setLoadingData] = useState(false);
+
+  const [fromMonth, setFromMonth] = useState<string>("");
+  const [toMonth, setToMonth] = useState<string>("");
 
   useEffect(() => {
     fetch("/api/seo/gsc/sites", { cache: "no-store" })
@@ -51,20 +67,41 @@ export default function SeoDashboardPage() {
     setLoadingData(true);
     fetch(`/api/seo/gsc/analytics?siteId=${selected}`, { cache: "no-store" })
       .then((r) => r.json())
-      .then((j) => j.ok && setData(j))
+      .then((j) => {
+        if (j.ok) {
+          setData(j);
+          const months = (j.monthly as MonthlyRow[]).map((m) => m.month);
+          setFromMonth(months[0] ?? "");
+          setToMonth(months[months.length - 1] ?? "");
+        }
+      })
       .finally(() => setLoadingData(false));
   }, [selected]);
 
   const isLive = sites.length > 0;
 
+  const monthOptions = useMemo(
+    () => (data?.monthly ?? []).map((m) => ({ value: m.month, label: monthLabel(m.month) })),
+    [data]
+  );
+
+  const filteredMonthly = useMemo(() => {
+    if (!data || !fromMonth || !toMonth) return data?.monthly ?? [];
+    return data.monthly.filter((m) => m.month >= fromMonth && m.month <= toMonth);
+  }, [data, fromMonth, toMonth]);
+
+  const filteredDaily = useMemo(() => {
+    if (!data || !fromMonth || !toMonth) return data?.daily ?? [];
+    return data.daily.filter((d) => d.date.slice(0, 7) >= fromMonth && d.date.slice(0, 7) <= toMonth);
+  }, [data, fromMonth, toMonth]);
+
   const liveKpis = useMemo(() => {
-    if (!data) return null;
-    const totals = data.daily.reduce(
+    const totals = filteredDaily.reduce(
       (a, r) => ({ clicks: a.clicks + r.clicks, impressions: a.impressions + r.impressions }),
       { clicks: 0, impressions: 0 }
     );
-    const avgPos = data.daily.length > 0
-      ? data.daily.reduce((a, r) => a + r.position * r.impressions, 0) / Math.max(1, totals.impressions)
+    const avgPos = filteredDaily.length > 0
+      ? filteredDaily.reduce((a, r) => a + r.position * r.impressions, 0) / Math.max(1, totals.impressions)
       : 0;
     return {
       clicks: totals.clicks,
@@ -72,7 +109,7 @@ export default function SeoDashboardPage() {
       ctr: totals.impressions > 0 ? totals.clicks / totals.impressions : 0,
       avgPosition: avgPos,
     };
-  }, [data]);
+  }, [filteredDaily]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -94,11 +131,27 @@ export default function SeoDashboardPage() {
         </div>
       )}
 
-      {/* Site selector when live + more than one site */}
-      {isLive && sites.length > 1 && (
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-slate-500">Website:</span>
-          <CustomSelect value={selected} onChange={setSelected} options={sites.map((s) => ({ value: s.id, label: s.label }))} />
+      {/* Filters: website + month range */}
+      {isLive && (
+        <div className="glass-panel flex flex-wrap items-center gap-3 p-3">
+          <div className="flex items-center gap-1.5">
+            <Globe2 size={14} className="shrink-0 text-slate-500" />
+            <CustomSelect
+              className="min-w-[180px]"
+              value={selected}
+              onChange={setSelected}
+              options={sites.map((s) => ({ value: s.id, label: s.label }))}
+            />
+          </div>
+          {monthOptions.length > 0 && (
+            <div className="flex items-center gap-1.5">
+              <CalendarRange size={14} className="shrink-0 text-slate-500" />
+              <span className="text-xs text-slate-500">From</span>
+              <CustomSelect className="min-w-[130px]" value={fromMonth} onChange={setFromMonth} options={monthOptions} />
+              <span className="text-xs text-slate-500">to</span>
+              <CustomSelect className="min-w-[130px]" value={toMonth} onChange={setToMonth} options={monthOptions} />
+            </div>
+          )}
         </div>
       )}
 
@@ -106,10 +159,10 @@ export default function SeoDashboardPage() {
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         {isLive ? (
           <>
-            <KpiCard label="Organic Clicks" value={formatNumber(liveKpis?.clicks ?? 0)} icon={MousePointer2} accent="blue" />
-            <KpiCard label="Impressions" value={formatNumber(liveKpis?.impressions ?? 0)} icon={Eye} accent="violet" />
-            <KpiCard label="Avg. CTR" value={formatPct(liveKpis?.ctr ?? 0)} icon={Percent} accent="cyan" />
-            <KpiCard label="Avg. Position" value={(liveKpis?.avgPosition ?? 0).toFixed(1)} icon={TrendingUp} accent="magenta" />
+            <KpiCard label="Organic Clicks" value={formatNumber(liveKpis.clicks)} icon={MousePointer2} accent="blue" />
+            <KpiCard label="Impressions" value={formatNumber(liveKpis.impressions)} icon={Eye} accent="violet" />
+            <KpiCard label="Avg. CTR" value={formatPct(liveKpis.ctr)} icon={Percent} accent="cyan" />
+            <KpiCard label="Avg. Position" value={liveKpis.avgPosition.toFixed(1)} icon={TrendingUp} accent="magenta" />
           </>
         ) : (
           <>
@@ -150,17 +203,17 @@ export default function SeoDashboardPage() {
           right={
             <div className="text-right">
               <div className="neon-text-cyan text-lg font-black">
-                {isLive ? formatNumber(liveKpis?.clicks ?? 0) : formatNumber(dashboardKpis.organicSessions)}
+                {isLive ? formatNumber(liveKpis.clicks) : formatNumber(dashboardKpis.organicSessions)}
               </div>
-              <div className="text-[10px] text-slate-500">{isLive ? "total clicks (16mo)" : "organic sessions"}</div>
+              <div className="text-[10px] text-slate-500">{isLive ? "total clicks (selected range)" : "organic sessions"}</div>
             </div>
           }
         >
           {isLive ? (
             loadingData ? (
               <div className="grid h-full place-items-center text-xs text-slate-500">Loading Search Console data…</div>
-            ) : data && data.monthly.length > 0 ? (
-              <MonthlyTrendChart data={data.monthly} />
+            ) : filteredMonthly.length > 0 ? (
+              <MonthlyTrendChart data={filteredMonthly} />
             ) : (
               <div className="grid h-full place-items-center text-xs text-slate-500">No data yet for this range.</div>
             )

@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 
-export type Role = "superadmin" | "advertiser" | "client";
+export type Role = "founder" | "superadmin" | "advertiser" | "client";
 
 export interface AppUser {
   id: string;
@@ -9,6 +9,13 @@ export interface AppUser {
   role: Role;
   clientName: string | null; // set when role === 'client'
   adAccountIds: string[]; // set when role === 'advertiser'
+}
+
+// Founder + Superadmin both get unrestricted access. Founder additionally
+// cannot be deleted or password-reset by anyone but themselves — enforced
+// wherever a mutation targets another user (see /api/users routes).
+export function hasFullAccess(role: Role): boolean {
+  return role === "founder" || role === "superadmin";
 }
 
 // Resolves the logged-in Supabase Auth user into our app_users row + scope.
