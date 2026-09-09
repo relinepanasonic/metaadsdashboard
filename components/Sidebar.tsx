@@ -14,6 +14,7 @@ import {
   UserCog,
   LogOut,
   Search,
+  Building2,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
@@ -47,6 +48,7 @@ function navFor(role: Me["role"]): { main: NavItem[]; bottom: NavItem[] } {
 
   const main: NavItem[] = [
     { label: "Overview", href: "/", icon: LayoutDashboard },
+    { label: "Clients", href: "/clients", icon: Building2 },
     // Core ad channels
     { label: "Meta Ads", href: "/meta-ads", icon: Share2, badge: "Live" },
     { label: "Google Ads", href: "/google-ads", icon: Globe, badge: "Soon" },
