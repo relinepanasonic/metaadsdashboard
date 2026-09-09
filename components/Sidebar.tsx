@@ -48,7 +48,6 @@ function navFor(role: Me["role"]): { main: NavItem[]; bottom: NavItem[] } {
 
   const main: NavItem[] = [
     { label: "Overview", href: "/", icon: LayoutDashboard },
-    { label: "Clients", href: "/clients", icon: Building2 },
     // Core ad channels
     { label: "Meta Ads", href: "/meta-ads", icon: Share2, badge: "Live" },
     { label: "Google Ads", href: "/google-ads", icon: Globe, badge: "Soon" },
@@ -56,6 +55,7 @@ function navFor(role: Me["role"]): { main: NavItem[]; bottom: NavItem[] } {
   ];
   const bottom: NavItem[] = [
     { label: "Users", href: "/users", icon: UserCog },
+    { label: "Clients", href: "/clients", icon: Building2 },
     { label: "Connections", href: "/connections", icon: Plug },
     { label: "Settings", href: "/settings", icon: Settings },
   ];
