@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/supabase/db";
 import { getCurrentUser } from "@/lib/auth/currentUser";
 import { draftPost } from "@/lib/services/contentWriter";
+import { isValidModelId, DEFAULT_MODEL } from "@/lib/seo/constants";
 
 export const maxDuration = 300;
 
@@ -11,8 +12,9 @@ export async function POST(req: NextRequest) {
   if (!me || me.role === "client") return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
   if (!db) return NextResponse.json({ ok: false, error: "Supabase not configured" }, { status: 500 });
 
-  const { id } = (await req.json()) as { id?: string };
+  const { id, model } = (await req.json()) as { id?: string; model?: string };
   if (!id) return NextResponse.json({ ok: false, error: "Missing keyword id" }, { status: 400 });
+  const modelId = model && isValidModelId(model) ? model : DEFAULT_MODEL;
 
   const { data: row, error: readErr } = await db
     .from("saved_keywords")
@@ -25,7 +27,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const draft = await draftPost(row.keyword);
+    const draft = await draftPost(row.keyword, modelId);
 
     const { error: writeErr } = await db
       .from("saved_keywords")

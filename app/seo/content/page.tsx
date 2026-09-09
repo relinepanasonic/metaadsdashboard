@@ -2,10 +2,13 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Factory, Sparkles, Send, ExternalLink, AlertTriangle, Save, Bookmark, Globe2 } from "lucide-react";
+import { Factory, Sparkles, Send, ExternalLink, AlertTriangle, Save, Bookmark, Globe2, Bot } from "lucide-react";
 import { formatNumber } from "@/lib/format";
-import { FIRSTHAND_MARKER } from "@/lib/seo/constants";
+import { FIRSTHAND_MARKER, MODEL_OPTIONS, DEFAULT_MODEL, type ModelId } from "@/lib/seo/constants";
 import { useSeoSite } from "@/components/seo/SeoSiteProvider";
+import CustomSelect from "@/components/CustomSelect";
+
+const MODEL_STORAGE_KEY = "seo:contentModel";
 
 const TAGS = ["Optimization", "Indonesia News", "Foreign Sellers", "Consumer Behavior", "Case Study"];
 
@@ -32,6 +35,25 @@ export default function ContentPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [model, setModel] = useState<ModelId>(DEFAULT_MODEL);
+
+  useEffect(() => {
+    try {
+      const remembered = window.localStorage.getItem(MODEL_STORAGE_KEY);
+      if (remembered && MODEL_OPTIONS.some((m) => m.id === remembered)) setModel(remembered as ModelId);
+    } catch {
+      // best-effort only
+    }
+  }, []);
+
+  function changeModel(id: string) {
+    setModel(id as ModelId);
+    try {
+      window.localStorage.setItem(MODEL_STORAGE_KEY, id);
+    } catch {
+      // best-effort only
+    }
+  }
 
   useEffect(() => {
     if (!selected) {
@@ -57,7 +79,7 @@ export default function ContentPage() {
     const res = await fetch("/api/seo/content/draft", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id }),
+      body: JSON.stringify({ id, model }),
     }).then((r) => r.json());
     setBusyId(null);
 
@@ -147,6 +169,19 @@ export default function ContentPage() {
 
   return (
     <div className="flex flex-col gap-4">
+      <div className="glass-panel flex flex-wrap items-center gap-3 p-3">
+        <Bot size={14} className="shrink-0 text-slate-500" />
+        <span className="text-xs text-slate-400">Draft with</span>
+        <CustomSelect
+          size="sm"
+          className="min-w-[220px]"
+          value={model}
+          onChange={changeModel}
+          options={MODEL_OPTIONS.map((m) => ({ value: m.id, label: m.label }))}
+        />
+        <span className="text-[10px] text-slate-600">Applies to every &quot;Draft with Claude&quot; below</span>
+      </div>
+
       {error && (
         <div className="glass-panel p-4 text-xs text-rose-300" style={{ boxShadow: "inset 0 0 0 1px rgba(251,113,133,0.3)" }}>
           {error}

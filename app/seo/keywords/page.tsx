@@ -1,9 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Bookmark, X, Search, Plus, Globe2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Bookmark, X, Search, Plus, Globe2, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { formatNumber } from "@/lib/format";
 import { useSeoSite } from "@/components/seo/SeoSiteProvider";
+
+type SortKey = "keyword" | "source" | "volume" | "difficulty" | "cpc_usd" | "position";
+type SortDir = "asc" | "desc";
 
 interface SavedKeyword {
   id: string;
@@ -34,6 +37,17 @@ export default function KeywordsPage() {
   const [newVolume, setNewVolume] = useState("");
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState("");
+
+  const [sortKey, setSortKey] = useState<SortKey>("volume");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
+
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) setSortDir((d) => (d === "desc" ? "asc" : "desc"));
+    else {
+      setSortKey(key);
+      setSortDir("desc");
+    }
+  }
 
   useEffect(() => {
     if (!selected) {
@@ -107,13 +121,37 @@ export default function KeywordsPage() {
     setAdding(false);
   }
 
-  const visible = filter
-    ? keywords.filter(
-        (k) =>
-          k.keyword.toLowerCase().includes(filter.toLowerCase()) ||
-          (k.context ?? "").toLowerCase().includes(filter.toLowerCase())
-      )
-    : keywords;
+  const visible = useMemo(() => {
+    let rows = filter
+      ? keywords.filter(
+          (k) =>
+            k.keyword.toLowerCase().includes(filter.toLowerCase()) ||
+            (k.context ?? "").toLowerCase().includes(filter.toLowerCase())
+        )
+      : keywords;
+
+    rows = [...rows].sort((a, b) => {
+      let av: string | number = a[sortKey] ?? (sortKey === "keyword" || sortKey === "source" ? "" : -Infinity);
+      let bv: string | number = b[sortKey] ?? (sortKey === "keyword" || sortKey === "source" ? "" : -Infinity);
+      if (typeof av === "string") av = av.toLowerCase();
+      if (typeof bv === "string") bv = bv.toLowerCase();
+      const cmp = av < bv ? -1 : av > bv ? 1 : 0;
+      return sortDir === "desc" ? -cmp : cmp;
+    });
+    return rows;
+  }, [keywords, filter, sortKey, sortDir]);
+
+  function SortHeader({ label, sk, align = "right" }: { label: string; sk: SortKey; align?: "left" | "right" }) {
+    const active = sortKey === sk;
+    return (
+      <th className={`px-3 py-2.5 font-semibold ${align === "right" ? "text-right" : "text-left"}`}>
+        <button onClick={() => toggleSort(sk)} className={`inline-flex items-center gap-1 hover:text-slate-200 ${active ? "text-slate-200" : ""}`}>
+          {label}
+          {active ? sortDir === "desc" ? <ArrowDown size={11} /> : <ArrowUp size={11} /> : <ArrowUpDown size={11} className="opacity-40" />}
+        </button>
+      </th>
+    );
+  }
 
   if (loadingSites || loading) {
     return <div className="glass-panel p-6 text-center text-xs text-slate-500">Loading saved keywords&hellip;</div>;
@@ -209,12 +247,12 @@ export default function KeywordsPage() {
             <table className="w-full min-w-[760px] border-collapse text-xs">
               <thead>
                 <tr className="text-left text-[10px] uppercase tracking-wider text-slate-500">
-                  <th className="px-3 py-2.5 font-semibold">Keyword</th>
-                  <th className="px-3 py-2.5 font-semibold">Source</th>
-                  <th className="px-3 py-2.5 text-right font-semibold">Volume</th>
-                  <th className="px-3 py-2.5 text-right font-semibold">Difficulty</th>
-                  <th className="px-3 py-2.5 text-right font-semibold">CPC (USD)</th>
-                  <th className="px-3 py-2.5 text-right font-semibold">Position</th>
+                  <SortHeader label="Keyword" sk="keyword" align="left" />
+                  <SortHeader label="Source" sk="source" align="left" />
+                  <SortHeader label="Volume" sk="volume" />
+                  <SortHeader label="Difficulty" sk="difficulty" />
+                  <SortHeader label="CPC (USD)" sk="cpc_usd" />
+                  <SortHeader label="Position" sk="position" />
                   <th className="px-3 py-2.5 text-right font-semibold"></th>
                 </tr>
               </thead>

@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { fetchSerpTop10 } from "./dataforseo";
-import { FIRSTHAND_MARKER } from "@/lib/seo/constants";
+import { FIRSTHAND_MARKER, MODEL_OPTIONS, DEFAULT_MODEL, type ModelId } from "@/lib/seo/constants";
 
 // The website template maps these to CSS classes — they must stay exactly these
 // five English strings even though the article itself is Indonesian.
@@ -49,8 +49,9 @@ function cleanSlug(raw: string): string {
   return s.slice(0, 60).replace(/-[^-]*$/, "");
 }
 
-export async function draftPost(keyword: string): Promise<Draft> {
+export async function draftPost(keyword: string, modelId: ModelId = DEFAULT_MODEL): Promise<Draft> {
   if (!process.env.ANTHROPIC_API_KEY) throw new Error("ANTHROPIC_API_KEY is not set");
+  const model = MODEL_OPTIONS.find((m) => m.id === modelId) ?? MODEL_OPTIONS[0];
 
   // Give Claude the live top 10 so it writes against what actually ranks today
   // rather than from memory. Non-fatal if it fails.
@@ -69,9 +70,9 @@ export async function draftPost(keyword: string): Promise<Draft> {
 
   const client = new Anthropic();
   const response = await client.messages.create({
-    model: "claude-opus-5",
+    model: model.id,
     max_tokens: 16000,
-    thinking: { type: "adaptive" },
+    ...(model.adaptiveThinking ? { thinking: { type: "adaptive" as const } } : {}),
     system: SYSTEM,
     messages: [
       {
