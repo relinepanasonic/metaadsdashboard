@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   ExternalLink, Copy, Check, Loader2, ShieldCheck, ShieldAlert, ShieldQuestion, ShieldOff,
-  RotateCcw, Trash2, ChevronRight, Info, KeyRound, Plus, Send, Pencil, Building2,
+  RotateCcw, Trash2, ChevronRight, Info, KeyRound, Plus, Send, Pencil, Building2, CalendarClock,
 } from "lucide-react";
 import CustomSelect from "@/components/CustomSelect";
 
@@ -18,6 +18,8 @@ interface SiteRow {
   publish_url: string | null;
   publish_secret: string | null;
   client_id: string | null;
+  publish_cadence_per_week: number;
+  last_auto_published_at: string | null;
   created_at: string;
 }
 
@@ -219,6 +221,15 @@ export default function ConnectSearchConsole({ serviceAccountEmail }: { serviceA
     }
   }
 
+  async function setCadence(id: string, perWeek: number) {
+    setSites((prev) => prev.map((s) => (s.id === id ? { ...s, publish_cadence_per_week: perWeek } : s)));
+    await fetch(`/api/seo/gsc/sites/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ publish_cadence_per_week: perWeek }),
+    });
+  }
+
   if (loading) {
     return (
       <div className="glass-panel p-8 text-center text-sm text-slate-500">
@@ -379,6 +390,21 @@ export default function ConnectSearchConsole({ serviceAccountEmail }: { serviceA
                       >
                         <Send size={11} /> Publish target
                       </button>
+                      <div className="flex items-center gap-1 rounded-md bg-white/[0.05] px-2 py-1 text-[11px] text-slate-300" title="Posts per week auto-published from the approved queue">
+                        <CalendarClock size={11} className={s.publish_cadence_per_week > 0 ? "text-emerald-400" : "text-slate-500"} />
+                        <select
+                          value={s.publish_cadence_per_week}
+                          onChange={(e) => setCadence(s.id, Number(e.target.value))}
+                          className="bg-transparent text-[11px] text-slate-300 focus:outline-none"
+                        >
+                          <option value={0}>Auto-publish off</option>
+                          <option value={1}>1/week</option>
+                          <option value={2}>2/week</option>
+                          <option value={3}>3/week</option>
+                          <option value={5}>5/week</option>
+                          <option value={7}>Daily</option>
+                        </select>
+                      </div>
                       <button
                         onClick={() => remove(s.id, s.label)}
                         className="flex items-center gap-1 rounded-md bg-rose-500/10 px-2 py-1 text-[11px] text-rose-300 hover:bg-rose-500/20"

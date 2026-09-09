@@ -32,12 +32,21 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (!db) return NextResponse.json({ ok: false, error: "Supabase not configured" }, { status: 500 });
 
   const { id } = await params;
-  const body = (await req.json()) as { label?: string; publish_url?: string; publish_secret?: string; client_id?: string | null };
-  const fields: Record<string, string | null> = {};
+  const body = (await req.json()) as {
+    label?: string;
+    publish_url?: string;
+    publish_secret?: string;
+    client_id?: string | null;
+    publish_cadence_per_week?: number;
+  };
+  const fields: Record<string, string | number | null> = {};
   if (body.label !== undefined) fields.label = body.label.trim();
   if (body.publish_url !== undefined) fields.publish_url = body.publish_url.trim() || null;
   if (body.publish_secret !== undefined) fields.publish_secret = body.publish_secret.trim() || null;
   if (body.client_id !== undefined) fields.client_id = body.client_id || null;
+  if (body.publish_cadence_per_week !== undefined) {
+    fields.publish_cadence_per_week = Math.max(0, Math.min(21, Math.round(body.publish_cadence_per_week)));
+  }
   if (Object.keys(fields).length === 0) return NextResponse.json({ ok: false, error: "Nothing to update" }, { status: 400 });
 
   const { error } = await db.from("search_console_sites").update(fields).eq("id", id);

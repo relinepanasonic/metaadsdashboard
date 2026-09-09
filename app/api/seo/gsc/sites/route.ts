@@ -22,7 +22,7 @@ export async function GET() {
 
   const { data, error } = await db
     .from("search_console_sites")
-    .select("id,domain,site_url,label,status,last_error,last_synced_at,publish_url,publish_secret,client_id,created_at")
+    .select("id,domain,site_url,label,status,last_error,last_synced_at,publish_url,publish_secret,client_id,publish_cadence_per_week,last_auto_published_at,created_at")
     .order("created_at", { ascending: false });
 
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });

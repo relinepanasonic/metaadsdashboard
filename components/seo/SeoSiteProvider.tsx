@@ -11,6 +11,8 @@ export interface SeoSite {
   publish_url: string | null;
   publish_secret: string | null;
   client_id: string | null;
+  publish_cadence_per_week: number;
+  last_auto_published_at: string | null;
 }
 
 export interface Brand {

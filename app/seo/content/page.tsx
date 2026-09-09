@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Factory, Sparkles, Send, ExternalLink, AlertTriangle, Save, Bookmark, Globe2, Bot } from "lucide-react";
+import { Factory, Sparkles, Send, ExternalLink, AlertTriangle, Save, Bookmark, Globe2, Bot, CalendarClock, Undo2 } from "lucide-react";
 import { formatNumber } from "@/lib/format";
 import { FIRSTHAND_MARKER, MODEL_OPTIONS, DEFAULT_MODEL, type ModelId } from "@/lib/seo/constants";
 import { useSeoSite } from "@/components/seo/SeoSiteProvider";
@@ -16,7 +16,7 @@ interface Item {
   id: string;
   keyword: string;
   volume: number | null;
-  status: "idea" | "drafted" | "published";
+  status: "idea" | "drafted" | "approved" | "published";
   draft_title: string | null;
   draft_slug: string | null;
   draft_meta: string | null;
@@ -117,6 +117,35 @@ export default function ContentPage() {
     setSaving(false);
   }
 
+  async function approve(item: Item) {
+    await saveDraft(item);
+    setBusyId(item.id);
+    setError("");
+    const res = await fetch("/api/seo/content/approve", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: item.id }),
+    }).then((r) => r.json());
+    setBusyId(null);
+    if (!res.ok) {
+      setError(res.error);
+      return;
+    }
+    patchItem(item.id, { status: "approved" });
+    setOpenId(null);
+  }
+
+  async function unapprove(id: string) {
+    setBusyId(id);
+    await fetch("/api/seo/content/approve", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+    setBusyId(null);
+    patchItem(id, { status: "drafted" });
+  }
+
   async function publish(item: Item) {
     await saveDraft(item);
     setBusyId(item.id);
@@ -164,6 +193,7 @@ export default function ContentPage() {
   const buckets = [
     { key: "idea", label: "To write", tint: "text-slate-300" },
     { key: "drafted", label: "Draft ready — needs your input", tint: "text-amber-300" },
+    { key: "approved", label: "Queued for auto-publish", tint: "text-cyan-300" },
     { key: "published", label: "Published", tint: "text-emerald-300" },
   ] as const;
 
@@ -243,6 +273,21 @@ export default function ContentPage() {
                         </>
                       )}
 
+                      {item.status === "approved" && (
+                        <>
+                          <span className="inline-flex items-center gap-1 rounded-md bg-cyan-500/15 px-2 py-1 text-[10px] font-semibold text-cyan-300">
+                            <CalendarClock size={10} /> Queued
+                          </span>
+                          <button
+                            onClick={() => unapprove(item.id)}
+                            disabled={busyId === item.id}
+                            className="flex items-center gap-1.5 rounded-lg bg-white/[0.06] px-3 py-1.5 text-[11px] font-semibold text-slate-300 hover:bg-white/[0.1] disabled:opacity-50"
+                          >
+                            <Undo2 size={12} /> Un-queue
+                          </button>
+                        </>
+                      )}
+
                       {item.status === "published" && item.published_url && (
                         <a
                           href={item.published_url}
@@ -309,13 +354,22 @@ export default function ContentPage() {
                             <Save size={12} /> {saving ? "Menyimpan…" : "Simpan draft"}
                           </button>
                           <button
+                            onClick={() => approve(item)}
+                            disabled={needsInput || busyId === item.id}
+                            title={needsInput ? "Isi bagian pengalaman dulu" : "Add to this site's auto-publish queue"}
+                            className="flex items-center gap-1.5 rounded-lg bg-cyan-500/15 px-4 py-2 text-[11px] font-semibold text-cyan-300 hover:bg-cyan-500/25 disabled:opacity-40"
+                            style={{ boxShadow: "inset 0 0 0 1px rgba(34,211,238,0.4)" }}
+                          >
+                            <CalendarClock size={12} /> {busyId === item.id ? "Menyimpan…" : "Approve for auto-publish"}
+                          </button>
+                          <button
                             onClick={() => publish(item)}
                             disabled={needsInput || busyId === item.id}
-                            title={needsInput ? "Isi bagian pengalaman dulu" : "Publish ke profesoronline.id"}
+                            title={needsInput ? "Isi bagian pengalaman dulu" : "Publish now, skipping the queue"}
                             className="flex items-center gap-1.5 rounded-lg bg-emerald-500/15 px-4 py-2 text-[11px] font-semibold text-emerald-300 hover:bg-emerald-500/25 disabled:opacity-40"
                             style={{ boxShadow: "inset 0 0 0 1px rgba(52,211,153,0.4)" }}
                           >
-                            <Send size={12} /> {busyId === item.id ? "Publishing…" : "Publish ke website"}
+                            <Send size={12} /> {busyId === item.id ? "Publishing…" : "Publish now"}
                           </button>
                         </div>
                       </div>
