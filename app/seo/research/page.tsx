@@ -40,6 +40,8 @@ export default function ResearchPage() {
     return savedKeywords.some((k) => k.keyword === keyword && k.source === source && k.context === context);
   }
 
+  // Toggles a keyword's saved state: saves it if not already saved, removes
+  // it if clicked again.
   async function saveKeyword(payload: {
     keyword: string;
     volume: number;
@@ -50,6 +52,14 @@ export default function ResearchPage() {
     context: string;
   }) {
     if (!selected) return;
+    const existing = savedKeywords.find((k) => k.keyword === payload.keyword && k.source === payload.source && k.context === payload.context);
+
+    if (existing) {
+      setSavedKeywords((prev) => prev.filter((k) => k.id !== existing.id));
+      await fetch(`/api/seo/keywords/saved/${existing.id}`, { method: "DELETE" });
+      return;
+    }
+
     const res = await fetch("/api/seo/keywords/saved", {
       method: "POST",
       headers: { "Content-Type": "application/json" },

@@ -138,12 +138,10 @@ export default function CompetitorAnalysis({
                       <td className="px-3 py-2.5 text-right">
                         <button
                           onClick={() =>
-                            !saved &&
                             onSave({ keyword: k.keyword, volume: k.volume, difficulty: k.difficulty, position: k.position, source: "ranked", context: searchedDomain })
                           }
-                          disabled={saved}
-                          title={saved ? "Saved" : "Save keyword"}
-                          className={`rounded-md p-1.5 ${saved ? "text-cyan-400" : "text-slate-500 hover:bg-white/[0.08] hover:text-slate-200"}`}
+                          title={saved ? "Remove from saved" : "Save keyword"}
+                          className={`rounded-md p-1.5 ${saved ? "text-cyan-400 hover:bg-rose-500/10 hover:text-rose-300" : "text-slate-500 hover:bg-white/[0.08] hover:text-slate-200"}`}
                         >
                           {saved ? <BookmarkCheck size={13} /> : <Bookmark size={13} />}
                         </button>
