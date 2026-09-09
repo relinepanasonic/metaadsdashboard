@@ -144,7 +144,7 @@ export default function ClientsManager({ canDelete }: { canDelete: boolean }) {
             <LabeledInput label="Owner" value={addForm.owner} onChange={(v) => setAddForm((f) => ({ ...f, owner: v }))} placeholder="Client's business owner" />
             <LabeledInput label="Website" value={addForm.websiteDomain} onChange={(v) => setAddForm((f) => ({ ...f, websiteDomain: v }))} placeholder="example.com" />
             <LabeledInput label="Meta Ads account" value={addForm.metaAdAccountId} onChange={(v) => setAddForm((f) => ({ ...f, metaAdAccountId: v }))} placeholder="Ad account id" />
-            <LabeledInput label="Camera" value={addForm.instagramHandle} onChange={(v) => setAddForm((f) => ({ ...f, instagramHandle: v }))} placeholder="@handle" />
+            <LabeledInput label="Instagram" value={addForm.instagramHandle} onChange={(v) => setAddForm((f) => ({ ...f, instagramHandle: v }))} placeholder="@handle" />
             <LabeledInput label="Google Ads account" value={addForm.googleAdsAccountId} onChange={(v) => setAddForm((f) => ({ ...f, googleAdsAccountId: v }))} placeholder="Customer id" />
           </div>
           <div className="mt-3 flex items-center gap-2">
@@ -177,7 +177,7 @@ export default function ClientsManager({ canDelete }: { canDelete: boolean }) {
               <th className="px-3 py-2.5 font-semibold">Brand</th>
               <th className="px-3 py-2.5 font-semibold">Website</th>
               <th className="px-3 py-2.5 font-semibold">Meta Ads</th>
-              <th className="px-3 py-2.5 font-semibold">Camera</th>
+              <th className="px-3 py-2.5 font-semibold">Instagram</th>
               <th className="px-3 py-2.5 font-semibold">Google</th>
               <th className="px-3 py-2.5 text-right font-semibold"></th>
             </tr>
