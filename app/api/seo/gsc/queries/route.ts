@@ -20,6 +20,7 @@ export async function GET(req: NextRequest) {
 
   const { data: site, error } = await db.from("search_console_sites").select("site_url,label").eq("id", siteId).single();
   if (error || !site) return NextResponse.json({ ok: false, error: "Site not found" }, { status: 404 });
+  if (!site.site_url) return NextResponse.json({ ok: false, error: "Search Console isn't connected for this site." }, { status: 400 });
 
   try {
     const startDate = isoDaysAgo(90);

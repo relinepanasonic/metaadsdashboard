@@ -5,25 +5,22 @@ import { FIRSTHAND_MARKER } from "@/lib/seo/constants";
 
 export const maxDuration = 120;
 
-// Hands a finished draft to the blog-automation service, which renders it with
-// the site template and uploads it to Hostinger over FTP.
+// Hands a finished draft to that site's own blog-automation deployment, which
+// renders it with the site's template and uploads it over FTP. Each website
+// can have its own publish_url/publish_secret (set per-site in Manage
+// Websites); BLOG_PUBLISH_URL / BLOG_PUBLISH_SECRET env vars are the fallback
+// for a single-site install that hasn't set per-site values yet.
 export async function POST(req: NextRequest) {
   const me = await getCurrentUser();
   if (!me || me.role === "client") return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
   if (!db) return NextResponse.json({ ok: false, error: "Supabase not configured" }, { status: 500 });
-
-  const endpoint = process.env.BLOG_PUBLISH_URL;
-  const secret = process.env.BLOG_PUBLISH_SECRET;
-  if (!endpoint || !secret) {
-    return NextResponse.json({ ok: false, error: "BLOG_PUBLISH_URL / BLOG_PUBLISH_SECRET belum diset." }, { status: 500 });
-  }
 
   const { id } = (await req.json()) as { id?: string };
   if (!id) return NextResponse.json({ ok: false, error: "Missing keyword id" }, { status: 400 });
 
   const { data: row, error: readErr } = await db
     .from("saved_keywords")
-    .select("id,keyword,status,draft_title,draft_slug,draft_meta,draft_excerpt,draft_html,draft_tag")
+    .select("id,keyword,status,site_id,draft_title,draft_slug,draft_meta,draft_excerpt,draft_html,draft_tag")
     .eq("id", id)
     .single();
   if (readErr || !row) return NextResponse.json({ ok: false, error: "Keyword not found" }, { status: 404 });
@@ -37,6 +34,22 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       { ok: false, error: "Bagian \"Dari Pengalaman Kami\" masih placeholder. Isi dulu dengan pengalaman nyata sebelum publish." },
       { status: 400 }
+    );
+  }
+
+  const { data: site, error: siteErr } = await db
+    .from("search_console_sites")
+    .select("publish_url,publish_secret,label")
+    .eq("id", row.site_id)
+    .single();
+  if (siteErr || !site) return NextResponse.json({ ok: false, error: "Site not found" }, { status: 404 });
+
+  const endpoint = site.publish_url || process.env.BLOG_PUBLISH_URL;
+  const secret = site.publish_secret || process.env.BLOG_PUBLISH_SECRET;
+  if (!endpoint || !secret) {
+    return NextResponse.json(
+      { ok: false, error: `No publish target set for "${site.label}". Set it in Manage Websites, or set BLOG_PUBLISH_URL / BLOG_PUBLISH_SECRET as a fallback.` },
+      { status: 500 }
     );
   }
 

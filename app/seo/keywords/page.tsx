@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Bookmark, X, Search, Plus } from "lucide-react";
+import { Bookmark, X, Search, Plus, Globe2 } from "lucide-react";
 import { formatNumber } from "@/lib/format";
+import { useSeoSite } from "@/components/seo/SeoSiteProvider";
 
 interface SavedKeyword {
   id: string;
@@ -24,6 +25,7 @@ const SOURCE_LABEL: Record<string, string> = {
 };
 
 export default function KeywordsPage() {
+  const { sites, selected, selectedSite, loading: loadingSites } = useSeoSite();
   const [keywords, setKeywords] = useState<SavedKeyword[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("");
@@ -34,12 +36,18 @@ export default function KeywordsPage() {
   const [addError, setAddError] = useState("");
 
   useEffect(() => {
-    fetch("/api/seo/keywords/saved", { cache: "no-store" })
+    if (!selected) {
+      setKeywords([]);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    fetch(`/api/seo/keywords/saved?siteId=${selected}`, { cache: "no-store" })
       .then((r) => r.json())
       .then((j) => j.ok && setKeywords(j.keywords))
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, []);
+  }, [selected]);
 
   async function remove(id: string) {
     setKeywords((prev) => prev.filter((k) => k.id !== id));
@@ -48,6 +56,7 @@ export default function KeywordsPage() {
 
   // Accepts one keyword or a pasted list (newline / comma separated).
   async function addManual() {
+    if (!selected) return;
     const terms = newKeyword
       .split(/[\n,]/)
       .map((t) => t.trim())
@@ -65,6 +74,7 @@ export default function KeywordsPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          siteId: selected,
           keyword: term,
           volume: Number.isFinite(volume) ? volume : undefined,
           source: "manual",
@@ -105,8 +115,18 @@ export default function KeywordsPage() {
       )
     : keywords;
 
-  if (loading) {
+  if (loadingSites || loading) {
     return <div className="glass-panel p-6 text-center text-xs text-slate-500">Loading saved keywords&hellip;</div>;
+  }
+
+  if (sites.length === 0) {
+    return (
+      <div className="glass-panel p-8 text-center">
+        <Globe2 size={28} className="mx-auto mb-3 text-slate-600" />
+        <div className="text-sm font-semibold text-slate-300">No websites added yet</div>
+        <div className="mt-1 text-xs text-slate-500">Add a website in Manage Websites to start saving keywords for it.</div>
+      </div>
+    );
   }
 
   return (
@@ -116,7 +136,7 @@ export default function KeywordsPage() {
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2">
             <Bookmark size={18} className="text-cyan-400" />
-            <h2 className="text-sm font-semibold text-slate-100">Saved Keywords</h2>
+            <h2 className="text-sm font-semibold text-slate-100">Saved Keywords — {selectedSite?.label}</h2>
             <span className="rounded-md bg-cyan-500/10 px-2 py-0.5 text-[10px] font-semibold text-cyan-300">{keywords.length}</span>
           </div>
           <span className="text-[10px] text-slate-500">All keywords you&apos;ve bookmarked from Research &mdash; ready for content briefs and ad targeting.</span>

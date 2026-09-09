@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Factory, Sparkles, Send, ExternalLink, AlertTriangle, Save, Bookmark } from "lucide-react";
+import { Factory, Sparkles, Send, ExternalLink, AlertTriangle, Save, Bookmark, Globe2 } from "lucide-react";
 import { formatNumber } from "@/lib/format";
 import { FIRSTHAND_MARKER } from "@/lib/seo/constants";
+import { useSeoSite } from "@/components/seo/SeoSiteProvider";
 
 const TAGS = ["Optimization", "Indonesia News", "Foreign Sellers", "Consumer Behavior", "Case Study"];
 
@@ -24,6 +25,7 @@ interface Item {
 }
 
 export default function ContentPage() {
+  const { sites, selected, selectedSite, loading: loadingSites } = useSeoSite();
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
   const [openId, setOpenId] = useState<string | null>(null);
@@ -32,12 +34,18 @@ export default function ContentPage() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    fetch("/api/seo/content", { cache: "no-store" })
+    if (!selected) {
+      setItems([]);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    fetch(`/api/seo/content?siteId=${selected}`, { cache: "no-store" })
       .then((r) => r.json())
       .then((j) => j.ok && setItems(j.items))
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, []);
+  }, [selected]);
 
   function patchItem(id: string, fields: Partial<Item>) {
     setItems((prev) => prev.map((it) => (it.id === id ? { ...it, ...fields } : it)));
@@ -106,13 +114,23 @@ export default function ContentPage() {
     setOpenId(null);
   }
 
-  if (loading) return <div className="glass-panel p-6 text-center text-xs text-slate-500">Loading&hellip;</div>;
+  if (loadingSites || loading) return <div className="glass-panel p-6 text-center text-xs text-slate-500">Loading&hellip;</div>;
+
+  if (sites.length === 0) {
+    return (
+      <div className="glass-panel p-8 text-center">
+        <Globe2 size={28} className="mx-auto mb-3 text-slate-600" />
+        <div className="text-sm font-semibold text-slate-300">No websites added yet</div>
+        <div className="mt-1 text-xs text-slate-500">Add a website in Manage Websites to start writing content for it.</div>
+      </div>
+    );
+  }
 
   if (items.length === 0) {
     return (
       <div className="glass-panel p-8 text-center">
         <Factory size={28} className="mx-auto mb-3 text-slate-600" />
-        <div className="text-sm font-semibold text-slate-300">No keywords to write about yet</div>
+        <div className="text-sm font-semibold text-slate-300">No keywords to write about yet — {selectedSite?.label}</div>
         <div className="mt-1 text-xs text-slate-500">
           Save keywords in <Link href="/seo/research" className="text-cyan-300 hover:underline">Research</Link>, or add them in{" "}
           <Link href="/seo/keywords" className="text-cyan-300 hover:underline">Keywords</Link>. Each one becomes one blog post.

@@ -2,15 +2,20 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/supabase/db";
 import { getCurrentUser } from "@/lib/auth/currentUser";
 
-// Every saved keyword plus its draft/publish state — the Content Engine board.
-export async function GET() {
+// Every saved keyword for one site plus its draft/publish state — the
+// Content Engine board.
+export async function GET(req: NextRequest) {
   const me = await getCurrentUser();
   if (!me || me.role === "client") return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
   if (!db) return NextResponse.json({ ok: true, items: [] });
 
+  const siteId = req.nextUrl.searchParams.get("siteId");
+  if (!siteId) return NextResponse.json({ ok: false, error: "Missing ?siteId=" }, { status: 400 });
+
   const { data, error } = await db
     .from("saved_keywords")
     .select("id,keyword,volume,status,draft_title,draft_slug,draft_meta,draft_excerpt,draft_html,draft_tag,published_url,published_at")
+    .eq("site_id", siteId)
     .order("created_at", { ascending: false });
 
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });

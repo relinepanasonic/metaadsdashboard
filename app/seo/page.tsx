@@ -2,22 +2,16 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { PiggyBank, MousePointer2, Target, TrendingUp, Sparkles, Plug, Eye, Percent, Globe2, CalendarRange } from "lucide-react";
+import { PiggyBank, MousePointer2, Target, TrendingUp, Sparkles, Plug, Eye, Percent, CalendarRange } from "lucide-react";
 import KpiCard from "@/components/KpiCard";
 import Panel from "@/components/Panel";
 import CustomSelect from "@/components/CustomSelect";
 import TrafficOverlayChart from "@/components/seo/TrafficOverlayChart";
 import IndexingHealth from "@/components/seo/IndexingHealth";
 import MonthlyTrendChart, { type MonthlyRow } from "@/components/seo/MonthlyTrendChart";
+import { useSeoSite } from "@/components/seo/SeoSiteProvider";
 import { trafficSeries, dashboardKpis, indexing } from "@/lib/seo/mock";
 import { formatIDR, formatNumber, formatPct } from "@/lib/format";
-
-interface SiteConnection {
-  id: string;
-  site_url: string;
-  label: string;
-  status: "pending" | "connected" | "error";
-}
 
 interface DailyRow {
   date: string;
@@ -40,27 +34,30 @@ function monthLabel(ym: string): string {
 }
 
 export default function SeoDashboardPage() {
-  const [sites, setSites] = useState<SiteConnection[]>([]);
+  const { sites, selectedSite, loading: loadingSites } = useSeoSite();
+  const gscSites = useMemo(() => sites.filter((s) => s.status === "connected"), [sites]);
   const [selected, setSelected] = useState<string>("");
   const [data, setData] = useState<AnalyticsResponse | null>(null);
-  const [loadingSites, setLoadingSites] = useState(true);
   const [loadingData, setLoadingData] = useState(false);
 
   const [fromMonth, setFromMonth] = useState<string>("");
   const [toMonth, setToMonth] = useState<string>("");
 
+  // Default the dashboard's own (GSC-only) picker to the globally selected
+  // site if that one has GSC connected; otherwise fall back to the first
+  // GSC-connected site so the page still shows something live.
   useEffect(() => {
-    fetch("/api/seo/gsc/sites", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((j) => {
-        if (j.ok) {
-          const connected = (j.sites as SiteConnection[]).filter((s) => s.status === "connected");
-          setSites(connected);
-          if (connected[0]) setSelected(connected[0].id);
-        }
-      })
-      .finally(() => setLoadingSites(false));
-  }, []);
+    if (gscSites.length === 0) {
+      setSelected("");
+      return;
+    }
+    setSelected((prev) => {
+      if (prev && gscSites.some((s) => s.id === prev)) return prev;
+      if (selectedSite && gscSites.some((s) => s.id === selectedSite.id)) return selectedSite.id;
+      return gscSites[0].id;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gscSites, selectedSite?.id]);
 
   useEffect(() => {
     if (!selected) return;
@@ -78,7 +75,7 @@ export default function SeoDashboardPage() {
       .finally(() => setLoadingData(false));
   }, [selected]);
 
-  const isLive = sites.length > 0;
+  const isLive = gscSites.length > 0;
 
   const monthOptions = useMemo(
     () => (data?.monthly ?? []).map((m) => ({ value: m.month, label: monthLabel(m.month) })),
@@ -119,30 +116,33 @@ export default function SeoDashboardPage() {
           <Plug size={18} className="text-amber-400" />
           <div className="min-w-0">
             <div className="text-sm font-semibold text-amber-300">You&apos;re viewing demo data</div>
-            <div className="text-xs text-slate-400">Connect your website to Google Search Console to see real traffic, indexing, and month-over-month trends.</div>
+            <div className="text-xs text-slate-400">
+              {sites.length === 0
+                ? "Add a website and connect Search Console to see real traffic, indexing, and month-over-month trends."
+                : "None of your websites have Search Console connected yet."}
+            </div>
           </div>
           <Link
             href="/seo/connect"
             className="ml-auto flex shrink-0 items-center gap-2 rounded-lg bg-amber-500/15 px-4 py-2 text-xs font-semibold text-amber-300 hover:bg-amber-500/25"
             style={{ boxShadow: "inset 0 0 0 1px rgba(251,191,36,0.4)" }}
           >
-            Connect Now
+            {sites.length === 0 ? "Add a Website" : "Connect Search Console"}
           </Link>
         </div>
       )}
 
-      {/* Filters: website + month range */}
+      {/* Filters: which GSC-connected site (only relevant when there's more than one) + month range */}
       {isLive && (
         <div className="glass-panel flex flex-wrap items-center gap-3 p-3">
-          <div className="flex items-center gap-1.5">
-            <Globe2 size={14} className="shrink-0 text-slate-500" />
+          {gscSites.length > 1 && (
             <CustomSelect
               className="min-w-[180px]"
               value={selected}
               onChange={setSelected}
-              options={sites.map((s) => ({ value: s.id, label: s.label }))}
+              options={gscSites.map((s) => ({ value: s.id, label: s.label }))}
             />
-          </div>
+          )}
           {monthOptions.length > 0 && (
             <div className="flex items-center gap-1.5">
               <CalendarRange size={14} className="shrink-0 text-slate-500" />
