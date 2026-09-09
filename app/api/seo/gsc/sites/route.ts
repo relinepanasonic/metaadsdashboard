@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/supabase/db";
 import { getCurrentUser } from "@/lib/auth/currentUser";
-import { verifySiteAccess, SEARCH_CONSOLE_CONFIGURED } from "@/lib/services/searchConsole";
+import { verifySiteAccess, explainSiteAccessError, SEARCH_CONSOLE_CONFIGURED } from "@/lib/services/searchConsole";
 
 function bareDomain(input: string): string {
   return input
@@ -84,11 +84,7 @@ export async function POST(req: NextRequest) {
       ok: true, // saved, just not verified yet — UI shows the error inline
       id: site.id,
       status: "error",
-      error: message.includes("403") || message.includes("Forbidden")
-        ? "Access denied — make sure you've added our service account as a user on this property in Search Console, then click Retest."
-        : message.includes("404")
-        ? "Property not found — check the exact URL format matches what's in Search Console (including sc-domain: prefix if used)."
-        : message,
+      error: explainSiteAccessError(message),
     });
   }
 }

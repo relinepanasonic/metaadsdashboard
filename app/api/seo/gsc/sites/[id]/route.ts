@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/supabase/db";
 import { getCurrentUser } from "@/lib/auth/currentUser";
-import { verifySiteAccess } from "@/lib/services/searchConsole";
+import { verifySiteAccess, explainSiteAccessError } from "@/lib/services/searchConsole";
 
 // Retest a GSC connection (after staff adds the service account as a user).
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -21,7 +21,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   } catch (err) {
     const message = (err as Error).message;
     await db.from("search_console_sites").update({ status: "error", last_error: message }).eq("id", id);
-    return NextResponse.json({ ok: true, status: "error", error: message });
+    return NextResponse.json({ ok: true, status: "error", error: explainSiteAccessError(message) });
   }
 }
 

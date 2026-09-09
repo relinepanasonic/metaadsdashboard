@@ -99,6 +99,20 @@ export async function verifySiteAccess(siteUrl: string): Promise<void> {
   await gscFetch(`/sites/${encodeURIComponent(siteUrl)}`);
 }
 
+// Turns a raw verifySiteAccess() failure into staff-facing guidance. Google's
+// Search Console API returns 404 for BOTH "this property doesn't exist" and
+// "you have no access to it" — it's not a reliable "wrong URL" signal, so the
+// message has to cover both causes rather than asserting one.
+export function explainSiteAccessError(rawMessage: string): string {
+  if (rawMessage.includes("403") || rawMessage.includes("Forbidden")) {
+    return "Access denied — make sure you've added our service account as a user on this property in Search Console, then click Retest.";
+  }
+  if (rawMessage.includes("404")) {
+    return "No access yet, or the URL format is wrong. Google's API returns this same 404 for both cases — most often it means the service account hasn't been added as a user on this exact property yet (or was just added and needs a minute + Retest). Also double-check whether this property is verified as a Domain property (sc-domain:example.com) or a URL-prefix property (https://example.com/) in Search Console — the URL here must match exactly.";
+  }
+  return rawMessage;
+}
+
 export interface SearchAnalyticsRow {
   date: string; // YYYY-MM-DD
   clicks: number;
