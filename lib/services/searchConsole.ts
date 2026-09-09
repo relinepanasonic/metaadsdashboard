@@ -121,12 +121,29 @@ export interface SearchAnalyticsRow {
   position: number;
 }
 
+// Sub-sites scope a parent property's data down to one page path (e.g. a
+// product line living at nanocare.id/product-a/) rather than needing their
+// own verified GSC property. "contains" is used instead of a prefix regex so
+// this works uniformly regardless of whether the parent property is verified
+// as sc-domain: or https://, with/without www — those all produce different
+// URL shapes in GSC's "page" dimension that a hand-built prefix regex would
+// have to special-case.
+function pagePathFilter(pathPrefix?: string) {
+  if (!pathPrefix) return {};
+  return {
+    dimensionFilterGroups: [
+      { filters: [{ dimension: "page", operator: "contains", expression: pathPrefix }] },
+    ],
+  };
+}
+
 // Daily search performance for a date range (used to build the traffic chart
 // and month-over-month comparisons).
 export async function fetchSearchAnalytics(
   siteUrl: string,
   startDate: string,
-  endDate: string
+  endDate: string,
+  pagePathPrefix?: string
 ): Promise<SearchAnalyticsRow[]> {
   const json = await gscFetch<{ rows?: Array<{ keys: string[]; clicks: number; impressions: number; ctr: number; position: number }> }>(
     `/sites/${encodeURIComponent(siteUrl)}/searchAnalytics/query`,
@@ -137,6 +154,7 @@ export async function fetchSearchAnalytics(
         endDate,
         dimensions: ["date"],
         rowLimit: 1000,
+        ...pagePathFilter(pagePathPrefix),
       }),
     }
   );
@@ -165,7 +183,8 @@ export async function fetchTopQueries(
   siteUrl: string,
   startDate: string,
   endDate: string,
-  rowLimit = 250
+  rowLimit = 250,
+  pagePathPrefix?: string
 ): Promise<QueryRow[]> {
   const json = await gscFetch<{ rows?: Array<{ keys: string[]; clicks: number; impressions: number; ctr: number; position: number }> }>(
     `/sites/${encodeURIComponent(siteUrl)}/searchAnalytics/query`,
@@ -176,6 +195,7 @@ export async function fetchTopQueries(
         endDate,
         dimensions: ["query"],
         rowLimit,
+        ...pagePathFilter(pagePathPrefix),
       }),
     }
   );

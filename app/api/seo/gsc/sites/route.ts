@@ -22,7 +22,7 @@ export async function GET() {
 
   const { data, error } = await db
     .from("search_console_sites")
-    .select("id,domain,site_url,label,status,last_error,last_synced_at,publish_url,publish_secret,client_id,publish_cadence_per_week,last_auto_published_at,created_at")
+    .select("id,domain,site_url,label,status,last_error,last_synced_at,publish_url,publish_secret,client_id,publish_cadence_per_week,last_auto_published_at,parent_site_id,path_prefix,created_at")
     .order("created_at", { ascending: false });
 
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
@@ -31,12 +31,55 @@ export async function GET() {
 
 // Register a website. `siteUrl` (the GSC property format) is optional — a site
 // can exist purely by domain and get GSC wired up later from the same page.
+// A sub-site (parentSiteId + pathPrefix) skips all of that: it inherits its
+// parent's GSC connection and just scopes queries to one page path.
 export async function POST(req: NextRequest) {
   const me = await getCurrentUser();
   if (!me || me.role === "client") return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
   if (!db) return NextResponse.json({ ok: false, error: "Supabase not configured" }, { status: 500 });
 
-  const { domain, siteUrl, label, clientId } = (await req.json()) as { domain?: string; siteUrl?: string; label: string; clientId?: string };
+  const body = (await req.json()) as {
+    domain?: string;
+    siteUrl?: string;
+    label: string;
+    clientId?: string;
+    parentSiteId?: string;
+    pathPrefix?: string;
+  };
+
+  if (body.parentSiteId && body.pathPrefix) {
+    const { data: parent, error: parentErr } = await db
+      .from("search_console_sites")
+      .select("domain,status,client_id")
+      .eq("id", body.parentSiteId)
+      .single();
+    if (parentErr || !parent) return NextResponse.json({ ok: false, error: "Parent site not found" }, { status: 404 });
+
+    const cleanPrefix = "/" + body.pathPrefix.trim().replace(/^\/+/, "").replace(/\/*$/, "/");
+    const subDomain = `${parent.domain}${cleanPrefix}`;
+
+    const { data: sub, error: subErr } = await db
+      .from("search_console_sites")
+      .upsert(
+        {
+          domain: subDomain,
+          label: body.label.trim(),
+          site_url: null,
+          status: parent.status, // inherits the parent's GSC access, no separate verify needed
+          parent_site_id: body.parentSiteId,
+          path_prefix: cleanPrefix,
+          client_id: body.clientId?.trim() || parent.client_id,
+          connected_by: me.id,
+        },
+        { onConflict: "domain" }
+      )
+      .select("id,status")
+      .single();
+    if (subErr || !sub) return NextResponse.json({ ok: false, error: subErr?.message ?? "Failed to save" }, { status: 500 });
+    return NextResponse.json({ ok: true, id: sub.id, status: sub.status });
+  }
+
+  const { domain, siteUrl, label, clientId } = body;
   const rawDomain = domain?.trim() || (siteUrl ? bareDomain(siteUrl) : "");
   if (!rawDomain || !label?.trim()) {
     return NextResponse.json({ ok: false, error: "Missing domain or label" }, { status: 400 });

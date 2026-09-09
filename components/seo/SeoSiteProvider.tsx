@@ -13,6 +13,8 @@ export interface SeoSite {
   client_id: string | null;
   publish_cadence_per_week: number;
   last_auto_published_at: string | null;
+  parent_site_id: string | null;
+  path_prefix: string | null;
 }
 
 export interface Brand {

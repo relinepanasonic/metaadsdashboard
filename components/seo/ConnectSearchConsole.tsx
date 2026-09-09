@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   ExternalLink, Copy, Check, Loader2, ShieldCheck, ShieldAlert, ShieldQuestion, ShieldOff,
   RotateCcw, Trash2, ChevronRight, Info, KeyRound, Plus, Send, Pencil, Building2, CalendarClock,
+  FolderTree, CornerDownRight,
 } from "lucide-react";
 import CustomSelect from "@/components/CustomSelect";
 
@@ -20,6 +21,8 @@ interface SiteRow {
   client_id: string | null;
   publish_cadence_per_week: number;
   last_auto_published_at: string | null;
+  parent_site_id: string | null;
+  path_prefix: string | null;
   created_at: string;
 }
 
@@ -96,6 +99,12 @@ export default function ConnectSearchConsole({ serviceAccountEmail }: { serviceA
 
   const [brandEditFor, setBrandEditFor] = useState<string | null>(null);
   const [savingBrand, setSavingBrand] = useState(false);
+
+  const [subsiteParent, setSubsiteParent] = useState<string | null>(null);
+  const [subsitePath, setSubsitePath] = useState("");
+  const [subsiteLabel, setSubsiteLabel] = useState("");
+  const [addingSubsite, setAddingSubsite] = useState(false);
+  const [subsiteError, setSubsiteError] = useState<string | null>(null);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -221,6 +230,34 @@ export default function ConnectSearchConsole({ serviceAccountEmail }: { serviceA
     }
   }
 
+  function openSubsiteForm(parentId: string) {
+    setSubsiteParent(parentId);
+    setSubsitePath("");
+    setSubsiteLabel("");
+    setSubsiteError(null);
+  }
+
+  async function addSubsite() {
+    if (!subsiteParent || !subsitePath.trim() || !subsiteLabel.trim()) return;
+    setAddingSubsite(true);
+    setSubsiteError(null);
+    try {
+      const res = await fetch("/api/seo/gsc/sites", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ parentSiteId: subsiteParent, pathPrefix: subsitePath.trim(), label: subsiteLabel.trim() }),
+      });
+      const json = await res.json();
+      if (!json.ok) throw new Error(json.error);
+      setSubsiteParent(null);
+      load();
+    } catch (e) {
+      setSubsiteError((e as Error).message);
+    } finally {
+      setAddingSubsite(false);
+    }
+  }
+
   async function setCadence(id: string, perWeek: number) {
     setSites((prev) => prev.map((s) => (s.id === id ? { ...s, publish_cadence_per_week: perWeek } : s)));
     await fetch(`/api/seo/gsc/sites/${id}`, {
@@ -323,15 +360,26 @@ export default function ConnectSearchConsole({ serviceAccountEmail }: { serviceA
       {/* Sites list */}
       {sites.length > 0 && (
         <div className="glass-panel p-5">
-          <h3 className="mb-3 text-sm font-semibold text-slate-100">Your Websites</h3>
+          <h3 className="mb-1 text-sm font-semibold text-slate-100">Your Websites</h3>
+          <p className="mb-3 text-xs text-slate-500">
+            Selling multiple products off one site? Add each product as a sub-site — it scopes traffic data to just that page path, inheriting the parent&apos;s Search Console access instead of needing its own.
+          </p>
           <div className="flex flex-col gap-2">
-            {sites.map((s) => {
-              const style = STATUS_STYLE[s.status];
+            {sites
+              .filter((s) => !s.parent_site_id)
+              .map((top) => [top, ...sites.filter((s) => s.parent_site_id === top.id)])
+              .flat()
+              .map((s) => {
+              const isSubsite = Boolean(s.parent_site_id);
+              const parent = isSubsite ? sites.find((p) => p.id === s.parent_site_id) : null;
+              const effectiveStatus = isSubsite ? parent?.status ?? s.status : s.status;
+              const style = STATUS_STYLE[effectiveStatus];
               const Icon = style.icon;
               const brand = clients.find((c) => c.id === s.client_id);
               return (
-                <div key={s.id} className="rounded-lg border border-white/[0.06]">
+                <div key={s.id} className={`rounded-lg border border-white/[0.06] ${isSubsite ? "ml-6" : ""}`}>
                   <div className="flex flex-wrap items-center gap-3 px-3 py-2.5">
+                    {isSubsite && <CornerDownRight size={13} className="shrink-0 text-slate-600" />}
                     <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg" style={{ background: style.bg }}>
                       <Icon size={15} style={{ color: style.color }} />
                     </span>
@@ -361,13 +409,17 @@ export default function ConnectSearchConsole({ serviceAccountEmail }: { serviceA
                       </button>
                     )}
 
-                    <span className="text-[11px] font-semibold" style={{ color: style.color }}>{style.label}</span>
-                    {s.status === "error" && s.last_error && (
+                    {isSubsite ? (
+                      <span className="text-[11px] text-slate-500">via {parent?.label ?? "parent"} · {s.path_prefix}</span>
+                    ) : (
+                      <span className="text-[11px] font-semibold" style={{ color: style.color }}>{style.label}</span>
+                    )}
+                    {!isSubsite && s.status === "error" && s.last_error && (
                       <span className="max-w-[220px] truncate text-[10px] text-rose-400" title={s.last_error}>{s.last_error}</span>
                     )}
 
                     <div className="ml-auto flex flex-wrap items-center gap-1.5">
-                      {s.status === "connected" || s.status === "error" ? (
+                      {isSubsite ? null : s.status === "connected" || s.status === "error" ? (
                         <button
                           onClick={() => retest(s.id)}
                           disabled={retesting === s.id}
@@ -382,6 +434,14 @@ export default function ConnectSearchConsole({ serviceAccountEmail }: { serviceA
                           className="flex items-center gap-1 rounded-md bg-cyan-500/10 px-2 py-1 text-[11px] text-cyan-300 hover:bg-cyan-500/20"
                         >
                           <ShieldCheck size={11} /> Connect GSC
+                        </button>
+                      )}
+                      {!isSubsite && (
+                        <button
+                          onClick={() => openSubsiteForm(s.id)}
+                          className="flex items-center gap-1 rounded-md bg-white/[0.05] px-2 py-1 text-[11px] text-slate-300 hover:bg-white/[0.1]"
+                        >
+                          <FolderTree size={11} /> Sub-site
                         </button>
                       )}
                       <button
@@ -446,6 +506,51 @@ export default function ConnectSearchConsole({ serviceAccountEmail }: { serviceA
                       {connectError && (
                         <div className="mt-2 flex items-start gap-1.5 rounded-lg bg-rose-500/10 px-3 py-2 text-[11px] text-rose-300">
                           <Info size={12} className="mt-0.5 shrink-0" /> {connectError}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {subsiteParent === s.id && (
+                    <div className="border-t border-white/[0.06] p-3">
+                      <p className="mb-2 text-[11px] text-slate-400">
+                        Adds a sub-site scoped to one page path under <strong className="text-slate-300">{s.domain}</strong> — it inherits this site&apos;s Search Console access automatically, no separate connection needed.
+                      </p>
+                      <div className="flex flex-wrap items-end gap-2">
+                        <div className="min-w-[160px]">
+                          <label className="mb-1 block text-[10px] uppercase tracking-wider text-slate-500">Page path</label>
+                          <input
+                            value={subsitePath}
+                            onChange={(e) => setSubsitePath(e.target.value)}
+                            onKeyDown={(e) => e.key === "Enter" && addSubsite()}
+                            placeholder="/product-a/"
+                            className="w-full rounded-lg border border-white/[0.12] bg-[#0b0e14] px-3 py-2 text-xs text-slate-100 placeholder:text-slate-600 focus:border-cyan-500/50 focus:outline-none"
+                          />
+                        </div>
+                        <div className="min-w-[160px] flex-1">
+                          <label className="mb-1 block text-[10px] uppercase tracking-wider text-slate-500">Display Name</label>
+                          <input
+                            value={subsiteLabel}
+                            onChange={(e) => setSubsiteLabel(e.target.value)}
+                            onKeyDown={(e) => e.key === "Enter" && addSubsite()}
+                            placeholder="Product A"
+                            className="w-full rounded-lg border border-white/[0.12] bg-[#0b0e14] px-3 py-2 text-xs text-slate-100 placeholder:text-slate-600 focus:border-cyan-500/50 focus:outline-none"
+                          />
+                        </div>
+                        <button
+                          onClick={addSubsite}
+                          disabled={addingSubsite || !subsitePath.trim() || !subsiteLabel.trim()}
+                          className="flex items-center gap-1.5 rounded-lg bg-cyan-500/15 px-3 py-2 text-xs font-semibold text-cyan-300 hover:bg-cyan-500/25 disabled:opacity-50"
+                        >
+                          {addingSubsite ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />} Add
+                        </button>
+                        <button onClick={() => setSubsiteParent(null)} className="rounded-lg bg-white/[0.05] px-3 py-2 text-xs text-slate-400 hover:bg-white/[0.1]">
+                          Cancel
+                        </button>
+                      </div>
+                      {subsiteError && (
+                        <div className="mt-2 flex items-start gap-1.5 rounded-lg bg-rose-500/10 px-3 py-2 text-[11px] text-rose-300">
+                          <Info size={12} className="mt-0.5 shrink-0" /> {subsiteError}
                         </div>
                       )}
                     </div>

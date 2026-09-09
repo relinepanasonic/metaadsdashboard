@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/supabase/db";
 import { getCurrentUser } from "@/lib/auth/currentUser";
 import { fetchTopQueries } from "@/lib/services/searchConsole";
+import { resolveGscTarget } from "@/lib/services/siteResolve";
 
 function isoDaysAgo(days: number): string {
   const d = new Date();
@@ -9,24 +9,23 @@ function isoDaysAgo(days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-// Real search queries for one connected site, last 90 days (Research tab).
+// Real search queries for one connected site (or sub-site path), last 90
+// days (Research tab).
 export async function GET(req: NextRequest) {
   const me = await getCurrentUser();
   if (!me || me.role === "client") return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
-  if (!db) return NextResponse.json({ ok: false, error: "Supabase not configured" }, { status: 500 });
 
   const siteId = req.nextUrl.searchParams.get("siteId");
   if (!siteId) return NextResponse.json({ ok: false, error: "Missing ?siteId=" }, { status: 400 });
 
-  const { data: site, error } = await db.from("search_console_sites").select("site_url,label").eq("id", siteId).single();
-  if (error || !site) return NextResponse.json({ ok: false, error: "Site not found" }, { status: 404 });
-  if (!site.site_url) return NextResponse.json({ ok: false, error: "Search Console isn't connected for this site." }, { status: 400 });
+  const target = await resolveGscTarget(siteId);
+  if (!target) return NextResponse.json({ ok: false, error: "Search Console isn't connected for this site." }, { status: 400 });
 
   try {
     const startDate = isoDaysAgo(90);
     const endDate = isoDaysAgo(3);
-    const queries = await fetchTopQueries(site.site_url, startDate, endDate);
-    return NextResponse.json({ ok: true, site: { url: site.site_url, label: site.label }, queries });
+    const queries = await fetchTopQueries(target.siteUrl, startDate, endDate, 250, target.pathPrefix);
+    return NextResponse.json({ ok: true, site: { url: target.siteUrl, label: target.label }, queries });
   } catch (err) {
     return NextResponse.json({ ok: false, error: (err as Error).message }, { status: 500 });
   }
