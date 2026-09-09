@@ -22,7 +22,7 @@ export async function GET() {
 
   const { data, error } = await db
     .from("search_console_sites")
-    .select("id,domain,site_url,label,status,last_error,last_synced_at,publish_url,publish_secret,created_at")
+    .select("id,domain,site_url,label,status,last_error,last_synced_at,publish_url,publish_secret,client_id,created_at")
     .order("created_at", { ascending: false });
 
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
   if (!me || me.role === "client") return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
   if (!db) return NextResponse.json({ ok: false, error: "Supabase not configured" }, { status: 500 });
 
-  const { domain, siteUrl, label } = (await req.json()) as { domain?: string; siteUrl?: string; label: string };
+  const { domain, siteUrl, label, clientId } = (await req.json()) as { domain?: string; siteUrl?: string; label: string; clientId?: string };
   const rawDomain = domain?.trim() || (siteUrl ? bareDomain(siteUrl) : "");
   if (!rawDomain || !label?.trim()) {
     return NextResponse.json({ ok: false, error: "Missing domain or label" }, { status: 400 });
@@ -44,6 +44,8 @@ export async function POST(req: NextRequest) {
   const cleanDomain = bareDomain(rawDomain);
   const cleanSiteUrl = siteUrl?.trim() || null;
 
+  // client_id is only included when explicitly passed, so re-upserting an
+  // existing site (e.g. wiring up GSC on it) never clobbers its brand link.
   const { data: site, error: insertErr } = await db
     .from("search_console_sites")
     .upsert(
@@ -53,6 +55,7 @@ export async function POST(req: NextRequest) {
         site_url: cleanSiteUrl,
         status: cleanSiteUrl ? "pending" : "none",
         connected_by: me.id,
+        ...(clientId !== undefined ? { client_id: clientId.trim() || null } : {}),
       },
       { onConflict: "domain" }
     )

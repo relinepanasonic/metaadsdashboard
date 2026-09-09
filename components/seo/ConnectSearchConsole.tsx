@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   ExternalLink, Copy, Check, Loader2, ShieldCheck, ShieldAlert, ShieldQuestion, ShieldOff,
-  RotateCcw, Trash2, ChevronRight, Info, KeyRound, Plus, Send, Pencil,
+  RotateCcw, Trash2, ChevronRight, Info, KeyRound, Plus, Send, Pencil, Building2,
 } from "lucide-react";
+import CustomSelect from "@/components/CustomSelect";
 
 interface SiteRow {
   id: string;
@@ -16,7 +17,13 @@ interface SiteRow {
   last_synced_at: string | null;
   publish_url: string | null;
   publish_secret: string | null;
+  client_id: string | null;
   created_at: string;
+}
+
+interface ClientOption {
+  id: string;
+  name: string;
 }
 
 const STATUS_STYLE = {
@@ -65,10 +72,12 @@ function Step({ n, title, children }: { n: number; title: string; children: Reac
 export default function ConnectSearchConsole({ serviceAccountEmail }: { serviceAccountEmail: string | null }) {
   const [configured, setConfigured] = useState<boolean | null>(null);
   const [sites, setSites] = useState<SiteRow[]>([]);
+  const [clients, setClients] = useState<ClientOption[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [domain, setDomain] = useState("");
   const [label, setLabel] = useState("");
+  const [brandId, setBrandId] = useState("");
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
 
@@ -83,15 +92,20 @@ export default function ConnectSearchConsole({ serviceAccountEmail }: { serviceA
   const [publishSecret, setPublishSecret] = useState("");
   const [savingPublish, setSavingPublish] = useState(false);
 
+  const [brandEditFor, setBrandEditFor] = useState<string | null>(null);
+  const [savingBrand, setSavingBrand] = useState(false);
+
   const load = useCallback(() => {
     setLoading(true);
     Promise.all([
       fetch("/api/seo/gsc/status", { cache: "no-store" }).then((r) => r.json()),
       fetch("/api/seo/gsc/sites", { cache: "no-store" }).then((r) => r.json()),
+      fetch("/api/clients", { cache: "no-store" }).then((r) => r.json()),
     ])
-      .then(([statusJson, sitesJson]) => {
+      .then(([statusJson, sitesJson, clientsJson]) => {
         if (statusJson.ok) setConfigured(statusJson.configured);
         if (sitesJson.ok) setSites(sitesJson.sites);
+        if (clientsJson.ok) setClients(clientsJson.clients);
       })
       .finally(() => setLoading(false));
   }, []);
@@ -108,17 +122,33 @@ export default function ConnectSearchConsole({ serviceAccountEmail }: { serviceA
       const res = await fetch("/api/seo/gsc/sites", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ domain: domain.trim(), label: label.trim() }),
+        body: JSON.stringify({ domain: domain.trim(), label: label.trim(), clientId: brandId || undefined }),
       });
       const json = await res.json();
       if (!json.ok) throw new Error(json.error);
       setDomain("");
       setLabel("");
+      setBrandId("");
       load();
     } catch (e) {
       setAddError((e as Error).message);
     } finally {
       setAdding(false);
+    }
+  }
+
+  async function setSiteBrand(id: string, newClientId: string) {
+    setSavingBrand(true);
+    try {
+      await fetch(`/api/seo/gsc/sites/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ client_id: newClientId || null }),
+      });
+      setBrandEditFor(null);
+      load();
+    } finally {
+      setSavingBrand(false);
     }
   }
 
@@ -228,6 +258,15 @@ export default function ConnectSearchConsole({ serviceAccountEmail }: { serviceA
               className="w-full rounded-lg border border-white/[0.12] bg-[#0b0e14] px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-600 focus:border-cyan-500/50 focus:outline-none"
             />
           </div>
+          <div className="min-w-[160px]">
+            <label className="mb-1 block text-[10px] uppercase tracking-wider text-slate-500">Brand (optional)</label>
+            <CustomSelect
+              value={brandId}
+              onChange={setBrandId}
+              placeholder="No brand yet"
+              options={[{ value: "", label: "No brand yet" }, ...clients.map((c) => ({ value: c.id, label: c.name }))]}
+            />
+          </div>
           <button
             onClick={addSite}
             disabled={adding || !domain.trim() || !label.trim()}
@@ -278,6 +317,7 @@ export default function ConnectSearchConsole({ serviceAccountEmail }: { serviceA
             {sites.map((s) => {
               const style = STATUS_STYLE[s.status];
               const Icon = style.icon;
+              const brand = clients.find((c) => c.id === s.client_id);
               return (
                 <div key={s.id} className="rounded-lg border border-white/[0.06]">
                   <div className="flex flex-wrap items-center gap-3 px-3 py-2.5">
@@ -288,6 +328,28 @@ export default function ConnectSearchConsole({ serviceAccountEmail }: { serviceA
                       <div className="text-xs font-semibold text-slate-100">{s.label}</div>
                       <div className="truncate text-[10px] text-slate-500">{s.domain}</div>
                     </div>
+
+                    {brandEditFor === s.id ? (
+                      <div className="flex items-center gap-1.5">
+                        <CustomSelect
+                          size="sm"
+                          value={s.client_id ?? ""}
+                          onChange={(v) => setSiteBrand(s.id, v)}
+                          placeholder="Unassigned"
+                          options={[{ value: "", label: "Unassigned" }, ...clients.map((c) => ({ value: c.id, label: c.name }))]}
+                        />
+                        {savingBrand && <Loader2 size={11} className="animate-spin text-slate-500" />}
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setBrandEditFor(s.id)}
+                        className="flex items-center gap-1 rounded-md bg-white/[0.04] px-2 py-1 text-[11px] text-slate-400 hover:bg-white/[0.08] hover:text-slate-200"
+                        title="Change brand"
+                      >
+                        <Building2 size={11} /> {brand?.name ?? "Unassigned"}
+                      </button>
+                    )}
+
                     <span className="text-[11px] font-semibold" style={{ color: style.color }}>{style.label}</span>
                     {s.status === "error" && s.last_error && (
                       <span className="max-w-[220px] truncate text-[10px] text-rose-400" title={s.last_error}>{s.last_error}</span>

@@ -1,12 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { Search, Globe2, Settings2 } from "lucide-react";
+import { Search, Globe2, Settings2, Building2 } from "lucide-react";
 import { useSeoSite } from "./SeoSiteProvider";
 import CustomSelect from "@/components/CustomSelect";
 
 export default function SeoHeader() {
-  const { sites, selected, setSelected, loading } = useSeoSite();
+  const { brands, selectedBrand, setSelectedBrand, sitesForSelectedBrand, selected, setSelected, loading } = useSeoSite();
 
   return (
     <div className="mb-6 flex flex-wrap items-center gap-3">
@@ -24,17 +24,37 @@ export default function SeoHeader() {
       </div>
 
       {!loading && (
-        <div className="ml-auto flex items-center gap-2">
-          {sites.length > 0 && (
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          {brands.length > 0 && (
             <>
-              <Globe2 size={14} className="shrink-0 text-slate-500" />
+              <Building2 size={14} className="shrink-0 text-slate-500" />
               <CustomSelect
-                className="min-w-[200px]"
-                value={selected}
-                onChange={setSelected}
-                options={sites.map((s) => ({ value: s.id, label: s.label }))}
+                className="min-w-[160px]"
+                value={selectedBrand}
+                onChange={setSelectedBrand}
+                options={brands.map((b) => ({ value: b.id, label: b.name }))}
               />
-              <span className="hidden text-[10px] text-slate-600 sm:inline">{sites.length} website{sites.length === 1 ? "" : "s"}</span>
+
+              <span className="text-slate-700">/</span>
+
+              {sitesForSelectedBrand.length > 0 ? (
+                <>
+                  <Globe2 size={14} className="shrink-0 text-slate-500" />
+                  <CustomSelect
+                    className="min-w-[200px]"
+                    value={selected}
+                    onChange={setSelected}
+                    options={sitesForSelectedBrand.map((s) => ({ value: s.id, label: s.label }))}
+                  />
+                  <span className="hidden text-[10px] text-slate-600 sm:inline">
+                    {sitesForSelectedBrand.length} website{sitesForSelectedBrand.length === 1 ? "" : "s"}
+                  </span>
+                </>
+              ) : (
+                <Link href="/seo/connect" className="text-xs font-semibold text-amber-300 hover:underline">
+                  Connect website first
+                </Link>
+              )}
             </>
           )}
           <Link
