@@ -97,7 +97,7 @@ export async function fetchDayInsights(igUserId: string, date: string): Promise<
 
   const tasks: Promise<[string, number][]>[] = DAY_METRICS.map(async (metric) => {
     const json = await graph<{ data: { total_value?: { value: number } }[] }>(`/${igUserId}/insights`, { metric, ...window });
-    return [[metric, json.data[0]?.total_value?.value ?? 0]];
+    return [[metric, json.data[0]?.total_value?.value ?? 0] as [string, number]];
   });
 
   // Follows and unfollows come split by follow_type: FOLLOWER = accounts that
