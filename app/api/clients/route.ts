@@ -16,7 +16,13 @@ export async function GET() {
     .order("name", { ascending: true });
 
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
-  return NextResponse.json({ ok: true, clients: data ?? [] });
+
+  // Each client can have several Instagram accounts and Facebook Pages.
+  const { data: social } = await db.from("social_accounts").select("id,client_id,platform,external_id,handle").order("created_at");
+  const byClient = new Map<string, typeof social>();
+  for (const a of social ?? []) byClient.set(a.client_id, [...(byClient.get(a.client_id) ?? []), a]);
+
+  return NextResponse.json({ ok: true, clients: (data ?? []).map((c) => ({ ...c, social: byClient.get(c.id) ?? [] })) });
 }
 
 export async function POST(req: NextRequest) {

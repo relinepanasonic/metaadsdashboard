@@ -13,9 +13,11 @@ export const INSTAGRAM_CONFIGURED = Boolean(TOKEN);
 
 export const REQUIRED_PERMISSIONS = ["instagram_basic", "instagram_manage_insights"] as const;
 
-async function graph<T>(path: string, params: Record<string, string> = {}): Promise<T> {
-  if (!TOKEN) throw new Error("META_ACCESS_TOKEN is not set.");
-  const qs = new URLSearchParams({ ...params, access_token: TOKEN });
+// Shared by the Facebook service too. `token` overrides the default for calls that need a Page access token.
+export async function graph<T>(path: string, params: Record<string, string> = {}, token?: string): Promise<T> {
+  const access = token ?? TOKEN;
+  if (!access) throw new Error("META_ACCESS_TOKEN is not set.");
+  const qs = new URLSearchParams({ ...params, access_token: access });
   const res = await fetch(`https://graph.facebook.com/${VERSION}${path}?${qs}`, { cache: "no-store" });
   const json = (await res.json()) as T & { error?: { message: string; code?: number } };
   if (!res.ok || json.error) {

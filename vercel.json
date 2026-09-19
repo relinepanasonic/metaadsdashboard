@@ -5,7 +5,7 @@
       "schedule": "0 2 * * *"
     },
     {
-      "path": "/api/cron/instagram-sync",
+      "path": "/api/cron/social-sync",
       "schedule": "30 2 * * *"
     }
   ]

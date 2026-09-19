@@ -2,13 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Users, TrendingUp, Eye, UserCheck, MousePointerClick, RefreshCw, Loader2, AlertTriangle, ExternalLink, Filter } from "lucide-react";
+import { Users, TrendingUp, Eye, UserCheck, MousePointerClick, RefreshCw, Loader2, AlertTriangle, ExternalLink, Filter, Camera, ThumbsUp } from "lucide-react";
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from "recharts";
 import CustomSelect from "@/components/CustomSelect";
 import { compactNumber, formatNumber } from "@/lib/format";
 
 interface Snapshot {
-  ig_user_id: string;
   snapshot_date: string;
   followers_count: number | null;
   reach: number | null;
@@ -29,10 +28,12 @@ interface Post {
 }
 
 interface Account {
+  accountId: string;
   clientId: string;
   clientName: string;
+  platform: "instagram" | "facebook";
   handle: string | null;
-  igUserId: string;
+  externalId: string;
   snapshots: Snapshot[];
   posts: Post[];
 }
@@ -70,6 +71,7 @@ export default function SocialDashboard() {
   const [status, setStatus] = useState<Status | null>(null);
   const [loading, setLoading] = useState(true);
   const [clientFilter, setClientFilter] = useState("all");
+  const [platformFilter, setPlatformFilter] = useState("all");
   const [range, setRange] = useState("30");
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -80,7 +82,7 @@ export default function SocialDashboard() {
   const load = useCallback(() => {
     setLoading(true);
     Promise.all([
-      fetch("/api/instagram/stats", { cache: "no-store" }).then((r) => r.json()),
+      fetch("/api/social/stats", { cache: "no-store" }).then((r) => r.json()),
       fetch("/api/instagram/status", { cache: "no-store" }).then((r) => r.json()),
     ])
       .then(([stats, st]) => {
@@ -97,7 +99,7 @@ export default function SocialDashboard() {
   async function syncNow() {
     setSyncing(true);
     setSyncMsg(null);
-    const res = await fetch("/api/instagram/sync", {
+    const res = await fetch("/api/social/sync", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ clientId: clientFilter === "all" ? undefined : clientFilter, days: 30 }),
@@ -110,8 +112,8 @@ export default function SocialDashboard() {
       setSyncMsg({ ok: false, text: res.error });
       return;
     }
-    const lines = (res.results as { client: string; daysStored?: number; postsStored?: number; error?: string; errors?: string[] }[]).map((r) =>
-      r.error ? `${r.client}: ${r.error}` : `${r.client}: ${r.daysStored} days, ${r.postsStored} posts${r.errors?.length ? ` (${r.errors[0]})` : ""}`
+    const lines = (res.results as { client: string; platform: string; account: string; summary?: string; error?: string }[]).map((r) =>
+      r.error ? `${r.client} / ${r.account}: ${r.error}` : `${r.client} / ${r.account}: ${r.summary}`
     );
     const failed = (res.results as { error?: string }[]).some((r) => r.error);
     setSyncMsg({ ok: !failed, text: lines.join(" · ") });
@@ -119,7 +121,15 @@ export default function SocialDashboard() {
   }
 
   const days = Number(range);
-  const selected = useMemo(() => (clientFilter === "all" ? accounts : accounts.filter((a) => a.clientId === clientFilter)), [accounts, clientFilter]);
+  const selected = useMemo(
+    () => accounts.filter((a) => (clientFilter === "all" || a.clientId === clientFilter) && (platformFilter === "all" || a.platform === platformFilter)),
+    [accounts, clientFilter, platformFilter]
+  );
+  const clientOptions = useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const a of accounts) seen.set(a.clientId, a.clientName);
+    return [...seen.entries()].map(([value, label]) => ({ value, label }));
+  }, [accounts]);
 
   const win = useMemo(
     () => ({ from: isoDaysAgo(days), to: isoDaysAgo(1), prevFrom: isoDaysAgo(days * 2), prevTo: isoDaysAgo(days + 1) }),
@@ -181,7 +191,7 @@ export default function SocialDashboard() {
   const hasData = accounts.some((a) => a.snapshots.length > 0);
   const setupNeeded = status && (!status.ok || !status.configured || !status.ready);
 
-  if (loading) return <div className="glass-panel p-6 text-center text-xs text-slate-500">Loading Instagram data&hellip;</div>;
+  if (loading) return <div className="glass-panel p-6 text-center text-xs text-slate-500">Loading social data&hellip;</div>;
 
   return (
     <div className="flex flex-col gap-4">
@@ -208,7 +218,17 @@ export default function SocialDashboard() {
           className="min-w-[180px]"
           value={clientFilter}
           onChange={setClientFilter}
-          options={[{ value: "all", label: "All accounts", accent: true }, ...accounts.map((a) => ({ value: a.clientId, label: a.handle || a.clientName }))]}
+          options={[{ value: "all", label: "All clients", accent: true }, ...clientOptions]}
+        />
+        <CustomSelect
+          className="min-w-[150px]"
+          value={platformFilter}
+          onChange={setPlatformFilter}
+          options={[
+            { value: "all", label: "All platforms" },
+            { value: "instagram", label: "Instagram" },
+            { value: "facebook", label: "Facebook" },
+          ]}
         />
         <CustomSelect
           className="min-w-[140px]"
@@ -221,7 +241,6 @@ export default function SocialDashboard() {
             { value: "60", label: "Last 60 days" },
           ]}
         />
-        <span className="hidden text-[10px] text-slate-600 sm:inline">Instagram only — Facebook Pages aren&apos;t connected yet</span>
         <button
           onClick={syncNow}
           disabled={syncing || accounts.length === 0}
@@ -246,7 +265,7 @@ export default function SocialDashboard() {
           <Users size={28} className="mx-auto mb-3 text-slate-600" />
           <div className="text-sm font-semibold text-slate-300">No Instagram accounts linked to clients yet</div>
           <div className="mt-1 text-xs text-slate-500">
-            Open <Link href="/clients" className="text-cyan-300 hover:underline">Clients</Link>, edit a client and use <strong className="text-slate-300">Find accounts</strong> next to Instagram to link one.
+            Open <Link href="/clients" className="text-cyan-300 hover:underline">Clients</Link> and click <strong className="text-slate-300">Add accounts</strong> on a client — each client can have as many Instagram accounts and Facebook Pages as it needs.
           </div>
         </div>
       ) : !hasData ? (
@@ -262,7 +281,7 @@ export default function SocialDashboard() {
             <Kpi label="Profile visits" icon={UserCheck} color="text-amber-400" value={compactNumber(kpis.profileViews.value)} change={kpis.profileViews.change} />
             <Kpi label="Accounts engaged" icon={MousePointerClick} color="text-rose-400" value={compactNumber(kpis.engaged.value)} change={kpis.engaged.change} />
           </div>
-          <div className="-mt-2 text-[10px] text-slate-600">Changes compare against the previous {days} days. Reach is summed per day, so it counts a person once for each day they were reached.</div>
+          <div className="-mt-2 text-[10px] text-slate-600">Changes compare against the previous {days} days. Reach is summed per day, so it counts a person once for each day they were reached. Facebook Pages contribute followers only for now — reach, views and engagement come from Instagram.</div>
 
           <div className="glass-panel p-4 sm:p-5">
             <h3 className="mb-3 text-sm font-semibold text-slate-100">Reach &amp; views per day</h3>
@@ -294,6 +313,7 @@ export default function SocialDashboard() {
               <thead>
                 <tr className="text-left text-[10px] uppercase tracking-wider text-slate-500">
                   <th className="px-3 py-2.5 font-semibold">Account</th>
+                  <th className="px-3 py-2.5 font-semibold">Client</th>
                   <th className="px-3 py-2.5 text-right font-semibold">Followers</th>
                   <th className="px-3 py-2.5 text-right font-semibold">Reach</th>
                   <th className="px-3 py-2.5 text-right font-semibold">Views</th>
@@ -307,11 +327,14 @@ export default function SocialDashboard() {
                   const one = [a];
                   const lastFollowers = [...a.snapshots].reverse().find((s) => s.followers_count != null)?.followers_count;
                   return (
-                    <tr key={a.clientId} className="border-t border-white/[0.05] hover:bg-white/[0.02]">
+                    <tr key={a.accountId} className="border-t border-white/[0.05] hover:bg-white/[0.02]">
                       <td className="px-3 py-2.5">
-                        <div className="font-semibold text-slate-100">{a.clientName}</div>
-                        <div className="text-[10px] text-slate-500">{a.handle}</div>
+                        <span className="inline-flex items-center gap-1.5 font-semibold text-slate-100">
+                          {a.platform === "instagram" ? <Camera size={12} className="text-pink-400" /> : <ThumbsUp size={12} className="text-blue-400" />}
+                          {a.handle || a.externalId}
+                        </span>
                       </td>
+                      <td className="px-3 py-2.5 text-slate-400">{a.clientName}</td>
                       <td className="px-3 py-2.5 text-right text-slate-200">{lastFollowers != null ? formatNumber(lastFollowers) : "—"}</td>
                       <td className="px-3 py-2.5 text-right text-slate-300">{formatNumber(sum(one, win.from, win.to, "reach"))}</td>
                       <td className="px-3 py-2.5 text-right text-slate-300">{formatNumber(sum(one, win.from, win.to, "views"))}</td>
