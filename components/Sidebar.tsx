@@ -15,7 +15,7 @@ import {
   LogOut,
   Search,
   Building2,
-  Instagram,
+  Camera,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
@@ -50,7 +50,7 @@ function navFor(role: Me["role"]): { main: NavItem[]; bottom: NavItem[] } {
   const main: NavItem[] = [
     { label: "Overview", href: "/", icon: LayoutDashboard },
     // Core ad channels
-    { label: "Social Media", href: "/social-media", icon: Instagram, badge: "New" },
+    { label: "Social Media", href: "/social-media", icon: Camera, badge: "New" },
     { label: "Meta Ads", href: "/meta-ads", icon: Share2, badge: "Live" },
     { label: "Google Ads", href: "/google-ads", icon: Globe, badge: "Soon" },
     { label: "SEO #1", href: "/seo", icon: Search, badge: "New", separatorAfter: true },

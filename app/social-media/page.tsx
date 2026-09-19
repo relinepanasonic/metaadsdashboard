@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Filter, Instagram, Facebook, Users, Heart, MessageCircle, TrendingUp } from "lucide-react";
+import { Filter, Camera, ThumbsUp, Users, Heart, MessageCircle, TrendingUp } from "lucide-react";
 
 export default function SocialMediaDashboard() {
   const [month, setMonth] = useState("Sep 2026");
@@ -94,7 +94,7 @@ export default function SocialMediaDashboard() {
         </div>
         <div className="rounded-xl border border-white/[0.06] bg-[#0f141e] p-6 h-[400px] flex items-center justify-center">
           <p className="text-slate-500 flex items-center gap-2">
-             <Facebook size={16} /> <Instagram size={16} /> Platform Split
+             <ThumbsUp size={16} /> <Camera size={16} /> Platform Split
           </p>
         </div>
       </div>
