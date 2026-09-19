@@ -4,7 +4,7 @@ export function formatIDR(n: number, compact = true): string {
   if (compact) {
     return "Rp " + compactNumber(n);
   }
-  return "Rp " + Math.round(n).toLocaleString("id-ID");
+  return "Rp " + Math.round(n).toLocaleString("en-US");
 }
 
 export function compactNumber(n: number): string {
@@ -12,13 +12,13 @@ export function compactNumber(n: number): string {
   if (abs >= 1_000_000_000) return (n / 1_000_000_000).toFixed(1) + "B";
   if (abs >= 1_000_000) return (n / 1_000_000).toFixed(1) + "M";
   if (abs >= 1_000) return (n / 1_000).toFixed(1) + "K";
-  return String(Math.round(n));
+  return String(Math.round(n).toLocaleString("en-US"));
 }
 
 export function formatPct(fraction: number, dp = 1): string {
-  return (fraction * 100).toFixed(dp) + "%";
+  return (fraction * 100).toLocaleString("en-US", { minimumFractionDigits: dp, maximumFractionDigits: dp }) + "%";
 }
 
 export function formatNumber(n: number): string {
-  return Math.round(n).toLocaleString("id-ID");
+  return Math.round(n).toLocaleString("en-US");
 }

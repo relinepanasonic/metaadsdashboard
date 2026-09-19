@@ -120,7 +120,7 @@ function windowFor(range: string): Window {
 function pctChange(now: number, before: number): string | null {
   if (before <= 0) return null;
   const p = ((now - before) / before) * 100;
-  return `${p >= 0 ? "+" : ""}${p.toFixed(1)}%`;
+  return `${p >= 0 ? "+" : ""}${p.toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
 }
 
 function sum(accounts: Account[], from: string, to: string, key: MetricKey): number {
