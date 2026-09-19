@@ -400,8 +400,8 @@ export default function SocialDashboard() {
       )}
 
       {/* Filters: Client | Platform | Account | Duration */}
-      <div className="glass-panel flex flex-wrap items-center gap-3 p-3">
-        <Filter size={14} className="shrink-0 text-cyan-400" />
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <Filter size={14} className="shrink-0 text-slate-500" />
         <CustomSelect
           className="min-w-[160px]"
           value={clientFilter}
@@ -436,24 +436,6 @@ export default function SocialDashboard() {
           onChange={setRange}
           options={durationOptions}
         />
-        <div className="ml-auto flex items-center gap-2">
-          <button
-            onClick={() => syncNow(30)}
-            disabled={syncing || accounts.length === 0}
-            className="flex items-center gap-2 rounded-lg bg-white/[0.06] px-3 py-2 text-xs font-semibold text-slate-300 hover:bg-white/[0.1] disabled:opacity-50"
-          >
-            {syncing ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />} Sync 30 days
-          </button>
-          <button
-            onClick={() => syncNow(90)}
-            disabled={syncing || accounts.length === 0}
-            className="flex items-center gap-2 rounded-lg bg-cyan-500/15 px-3 py-2 text-xs font-semibold text-cyan-300 hover:bg-cyan-500/25 disabled:opacity-50"
-            style={{ boxShadow: "inset 0 0 0 1px rgba(34,211,238,0.4)" }}
-            title="Pulls everything Meta still returns (about 90 days) and stores it permanently"
-          >
-            {syncing ? <Loader2 size={13} className="animate-spin" /> : <History size={13} />} Backfill 90 days
-          </button>
-        </div>
       </div>
 
       <div className="-mt-2 flex flex-wrap items-center gap-1.5 px-1 text-[10px] text-slate-500">
@@ -488,7 +470,7 @@ export default function SocialDashboard() {
         </div>
       ) : !hasData ? (
         <div className="glass-panel p-8 text-center text-xs text-slate-500">
-          {accounts.length} account{accounts.length === 1 ? "" : "s"} linked, but no data stored yet. Click <strong className="text-slate-300">Sync 30 days</strong> to start.
+          {accounts.length} account{accounts.length === 1 ? "" : "s"} linked, but no data stored yet. Data will automatically appear after the next daily sync.
         </div>
       ) : (
         <>
