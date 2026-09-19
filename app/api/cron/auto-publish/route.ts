@@ -4,7 +4,7 @@ import { publishSavedKeyword, PublishError } from "@/lib/services/publishKeyword
 
 export const maxDuration = 120;
 
-// Runs hourly (see vercel.json). For every site with an auto-publish cadence
+// Runs daily at 02:00 UTC / 09:00 WIB (see vercel.json; Hobby plan allows daily crons only). For every site with an auto-publish cadence
 // set, publishes the oldest approved post once enough time has passed since
 // that site's last auto-publish — a fixed-cadence drip, FIFO per site.
 export async function GET(req: NextRequest) {
@@ -24,8 +24,9 @@ export async function GET(req: NextRequest) {
 
   for (const site of sites ?? []) {
     const intervalHours = (7 * 24) / site.publish_cadence_per_week;
+    // 12h grace so a daily cron that lands a few minutes early still counts as due.
     const dueAt = site.last_auto_published_at
-      ? new Date(new Date(site.last_auto_published_at).getTime() + intervalHours * 3600_000)
+      ? new Date(new Date(site.last_auto_published_at).getTime() + (intervalHours - 12) * 3600_000)
       : new Date(0);
     if (dueAt > new Date()) {
       results.push({ site: site.label, skipped: `not due until ${dueAt.toISOString()}` });
