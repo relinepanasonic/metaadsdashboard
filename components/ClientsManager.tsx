@@ -151,7 +151,7 @@ export default function ClientsManager({ canDelete }: { canDelete: boolean }) {
             <LabeledInput label="Instagram" value={addForm.instagramHandle} onChange={(v) => setAddForm((f) => ({ ...f, instagramHandle: v }))} placeholder="@handle" />
             <div>
               <LabeledInput label="Instagram account ID" value={addForm.instagramUserId} onChange={(v) => setAddForm((f) => ({ ...f, instagramUserId: v }))} placeholder="e.g. 17841435173358588" />
-              <IgFinder onPick={(handle, id) => setAddForm((f) => ({ ...f, instagramHandle: "@" + handle, instagramUserId: id }))} />
+              <IgFinder currentId={addForm.instagramUserId} onPick={(handle, id) => setAddForm((f) => ({ ...f, instagramHandle: "@" + handle, instagramUserId: id }))} />
             </div>
             <LabeledInput label="Google Ads account" value={addForm.googleAdsAccountId} onChange={(v) => setAddForm((f) => ({ ...f, googleAdsAccountId: v }))} placeholder="Customer id" />
           </div>
@@ -210,7 +210,7 @@ export default function ClientsManager({ canDelete }: { canDelete: boolean }) {
                         <div className="flex flex-col gap-1">
                           <RowInput value={editForm.instagramHandle} onChange={(v) => setEditForm((f) => ({ ...f, instagramHandle: v }))} placeholder="@handle" />
                           <RowInput value={editForm.instagramUserId} onChange={(v) => setEditForm((f) => ({ ...f, instagramUserId: v }))} placeholder="account ID" />
-                          <IgFinder onPick={(handle, id) => setEditForm((f) => ({ ...f, instagramHandle: "@" + handle, instagramUserId: id }))} />
+                          <IgFinder currentId={editForm.instagramUserId} onPick={(handle, id) => setEditForm((f) => ({ ...f, instagramHandle: "@" + handle, instagramUserId: id }))} />
                         </div>
                       </td>
                       <td className="px-3 py-2"><RowInput value={editForm.googleAdsAccountId} onChange={(v) => setEditForm((f) => ({ ...f, googleAdsAccountId: v }))} /></td>
@@ -307,10 +307,12 @@ function RowInput({ value, onChange, placeholder }: { value: string; onChange: (
 // Lists Instagram accounts the Meta token can reach so the numeric ID never
 // has to be copied by hand. Errors (e.g. token lacks instagram permissions)
 // are shown inline so the reason is visible.
-function IgFinder({ onPick }: { onPick: (handle: string, id: string) => void }) {
+function IgFinder({ onPick, currentId }: { onPick: (handle: string, id: string) => void; currentId: string }) {
   const [accounts, setAccounts] = useState<{ id: string; username: string; pageName: string }[] | null>(null);
   const [loading, setLoading] = useState(false);
+  const [checking, setChecking] = useState(false);
   const [err, setErr] = useState("");
+  const [okMsg, setOkMsg] = useState("");
 
   async function load() {
     setLoading(true);
@@ -321,31 +323,58 @@ function IgFinder({ onPick }: { onPick: (handle: string, id: string) => void }) 
     else setErr(res.error);
   }
 
-  if (!accounts) {
-    return (
-      <div className="mt-1">
-        <button type="button" onClick={load} disabled={loading} className="text-[10px] font-semibold text-cyan-300 hover:underline disabled:opacity-50">
-          {loading ? "Searching…" : "Find accounts"}
-        </button>
-        {err && <div className="mt-1 max-w-[260px] text-[10px] text-rose-300">{err}</div>}
-      </div>
-    );
+  // Works for accounts the list can't show (not attached to a Page the token
+  // sees): confirms the ID is readable and fills in the handle.
+  async function check() {
+    setChecking(true);
+    setErr("");
+    setOkMsg("");
+    const res = await fetch(`/api/instagram/lookup?id=${encodeURIComponent(currentId.trim())}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .catch(() => ({ ok: false, error: "Request failed" }));
+    setChecking(false);
+    if (res.ok) {
+      setOkMsg(`@${res.username} · ${res.followers.toLocaleString("en-US")} followers`);
+      onPick(res.username, currentId.trim());
+    } else setErr(res.error);
   }
-
-  if (accounts.length === 0) return <div className="mt-1 text-[10px] text-amber-300">No Instagram accounts reachable by the token yet.</div>;
 
   return (
     <div className="mt-1">
-      <CustomSelect
-        size="sm"
-        value=""
-        placeholder="Pick an account…"
-        onChange={(id) => {
-          const a = accounts.find((x) => x.id === id);
-          if (a) onPick(a.username, a.id);
-        }}
-        options={accounts.map((a) => ({ value: a.id, label: "@" + a.username + " (" + a.pageName + ")" }))}
-      />
+      <div className="flex items-center gap-3">
+        {!accounts && (
+          <button type="button" onClick={load} disabled={loading} className="text-[10px] font-semibold text-cyan-300 hover:underline disabled:opacity-50">
+            {loading ? "Searching…" : "Find accounts"}
+          </button>
+        )}
+        {currentId.trim() && (
+          <button type="button" onClick={check} disabled={checking} className="text-[10px] font-semibold text-emerald-300 hover:underline disabled:opacity-50">
+            {checking ? "Checking…" : "Check ID"}
+          </button>
+        )}
+      </div>
+
+      {okMsg && <div className="mt-1 text-[10px] text-emerald-300">✓ {okMsg}</div>}
+      {err && <div className="mt-1 max-w-[260px] text-[10px] text-rose-300">{err}</div>}
+
+      {accounts && accounts.length === 0 && (
+        <div className="mt-1 max-w-[260px] text-[10px] text-amber-300">No accounts listed. Paste the ID from Business Settings → Instagram accounts, then Check ID.</div>
+      )}
+      {accounts && accounts.length > 0 && (
+        <>
+          <CustomSelect
+            size="sm"
+            value=""
+            placeholder="Pick an account…"
+            onChange={(id) => {
+              const a = accounts.find((x) => x.id === id);
+              if (a) onPick(a.username, a.id);
+            }}
+            options={accounts.map((a) => ({ value: a.id, label: "@" + a.username + " (" + a.pageName + ")" }))}
+          />
+          <div className="mt-1 max-w-[260px] text-[10px] text-slate-500">Account missing? Paste its ID from Business Settings → Instagram accounts, then Check ID.</div>
+        </>
+      )}
     </div>
   );
 }
