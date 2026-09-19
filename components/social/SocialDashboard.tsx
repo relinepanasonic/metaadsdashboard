@@ -513,7 +513,7 @@ export default function SocialDashboard() {
                         formatter={(value, name) => [formatNumber(Number(value) || 0), name === "reach" ? "Reach" : "Views"]}
                         labelStyle={{ color: "#e5e9f0" }}
                         itemStyle={{ color: "#e5e9f0" }}
-                        contentStyle={{ background: "#11151f", border: "1px solid rgba(255,255,255,0.12)" }}
+                        cursor={{ fill: "rgba(255,255,255,0.03)" }}
                       />
                       <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ fontSize: 12, color: "#9fb0d0", paddingBottom: 8 }} formatter={(v) => (v === "reach" ? "Reach" : "Views")} />
                       <Area type="monotone" dataKey="reach" stroke="#34d399" strokeWidth={2.5} fill="url(#reachFill)" dot={false} activeDot={{ r: 5, fill: "#34d399", stroke: "#0b0e14", strokeWidth: 2 }} />
@@ -544,7 +544,7 @@ export default function SocialDashboard() {
                         formatter={(value, name) => [formatNumber(Number(value) || 0), name === "reach" ? "Reach" : "Views"]}
                         labelStyle={{ color: "#e5e9f0" }}
                         itemStyle={{ color: "#e5e9f0" }}
-                        contentStyle={{ background: "#11151f", border: "1px solid rgba(255,255,255,0.12)" }}
+                        cursor={{ fill: "rgba(255,255,255,0.03)" }}
                       />
                       <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ fontSize: 12, color: "#9fb0d0", paddingBottom: 8 }} formatter={(v) => (v === "reach" ? "Reach" : "Views")} />
                       <Bar dataKey="reach" fill="#34d399" radius={[4, 4, 0, 0]} />
@@ -634,7 +634,7 @@ export default function SocialDashboard() {
                         <CartesianGrid strokeDasharray="3 3" stroke="rgba(120,160,255,0.08)" vertical={false} />
                         <XAxis dataKey="name" tick={{ fill: "#7c8bb0", fontSize: 11 }} axisLine={{ stroke: "rgba(120,160,255,0.15)" }} tickLine={false} />
                         <YAxis tick={{ fill: "#7c8bb0", fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => `${Math.round(Number(v))}%`} width={40} />
-                        <Tooltip {...tooltipStyle} formatter={sliceTooltip} />
+                        <Tooltip {...tooltipStyle} formatter={sliceTooltip} cursor={{ fill: "rgba(255,255,255,0.03)" }} />
                         <Bar dataKey="pct" fill="#22d3ee" radius={[4, 4, 0, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
@@ -650,7 +650,7 @@ export default function SocialDashboard() {
                             <Cell key={g.name} fill={GENDER_COLOR[g.name] ?? "#a78bfa"} />
                           ))}
                         </Pie>
-                        <Tooltip {...tooltipStyle} formatter={sliceTooltip} />
+                        <Tooltip {...tooltipStyle} formatter={sliceTooltip} cursor={{ fill: "rgba(255,255,255,0.03)" }} />
                         <Legend verticalAlign="bottom" iconType="circle" wrapperStyle={{ fontSize: 12, color: "#9fb0d0" }} />
                       </PieChart>
                     </ResponsiveContainer>
@@ -800,7 +800,6 @@ function slices(map: Map<string, number>, label: (k: string) => string, order?: 
 const tooltipStyle = {
   labelStyle: { color: "#e5e9f0" },
   itemStyle: { color: "#e5e9f0" },
-  contentStyle: { background: "#11151f", border: "1px solid rgba(255,255,255,0.12)" },
 };
 
 // Recharts hands the tooltip both the plotted value and the original slice.
@@ -826,7 +825,7 @@ function HorizontalBars({ data, color }: { data: Slice[]; color: string }) {
         <CartesianGrid strokeDasharray="3 3" stroke="rgba(120,160,255,0.08)" horizontal={false} />
         <XAxis type="number" tick={{ fill: "#7c8bb0", fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => `${Math.round(Number(v))}%`} />
         <YAxis type="category" dataKey="name" width={130} tick={{ fill: "#9fb0d0", fontSize: 11 }} axisLine={false} tickLine={false} />
-        <Tooltip {...tooltipStyle} formatter={sliceTooltip} />
+        <Tooltip {...tooltipStyle} formatter={sliceTooltip} cursor={{ fill: "rgba(255,255,255,0.03)" }} />
         <Bar dataKey="pct" fill={color} radius={[0, 4, 4, 0]} />
       </BarChart>
     </ResponsiveContainer>
