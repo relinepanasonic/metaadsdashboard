@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Users, TrendingUp, Eye, UserCheck, MousePointerClick, RefreshCw, Loader2, AlertTriangle, ExternalLink, Filter, Camera, ThumbsUp, History } from "lucide-react";
-import { ResponsiveContainer, LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from "recharts";
+import { ResponsiveContainer, ComposedChart, Area, LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from "recharts";
 import CustomSelect from "@/components/CustomSelect";
+import KpiCard from "@/components/KpiCard";
 import { compactNumber, formatNumber } from "@/lib/format";
 
 interface Snapshot {
@@ -475,11 +476,11 @@ export default function SocialDashboard() {
       ) : (
         <>
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
-            <Kpi label="Followers" icon={Users} color="text-blue-400" value={formatNumber(kpis.followers)} change={kpis.followerDelta != null ? `${kpis.followerDelta >= 0 ? "+" : ""}${formatNumber(kpis.followerDelta)}` : null} />
-            <Kpi label="Reach" icon={TrendingUp} color="text-emerald-400" value={insightsAvailable ? compactNumber(kpis.reach.value) : dash} change={insightsAvailable ? kpis.reach.change : null} />
-            <Kpi label="Views" icon={Eye} color="text-violet-400" value={insightsAvailable ? compactNumber(kpis.views.value) : dash} change={insightsAvailable ? kpis.views.change : null} />
-            <Kpi label="Profile visits" icon={UserCheck} color="text-amber-400" value={insightsAvailable ? compactNumber(kpis.profileViews.value) : dash} change={insightsAvailable ? kpis.profileViews.change : null} />
-            <Kpi label="Accounts engaged" icon={MousePointerClick} color="text-rose-400" value={insightsAvailable ? compactNumber(kpis.engaged.value) : dash} change={insightsAvailable ? kpis.engaged.change : null} />
+            <KpiCard label="Followers" icon={Users} accent="blue" value={formatNumber(kpis.followers)} delta={kpis.followerDelta != null ? formatNumber(Math.abs(kpis.followerDelta)) : undefined} deltaPositive={kpis.followerDelta != null ? kpis.followerDelta >= 0 : true} />
+            <KpiCard label="Reach" icon={TrendingUp} accent="cyan" value={insightsAvailable ? compactNumber(kpis.reach.value) : dash} delta={insightsAvailable && kpis.reach.change ? kpis.reach.change.replace(/^[+-]/, '') : undefined} deltaPositive={insightsAvailable && kpis.reach.change ? !kpis.reach.change.startsWith("-") : true} />
+            <KpiCard label="Views" icon={Eye} accent="violet" value={insightsAvailable ? compactNumber(kpis.views.value) : dash} delta={insightsAvailable && kpis.views.change ? kpis.views.change.replace(/^[+-]/, '') : undefined} deltaPositive={insightsAvailable && kpis.views.change ? !kpis.views.change.startsWith("-") : true} />
+            <KpiCard label="Profile visits" icon={UserCheck} accent="magenta" value={insightsAvailable ? compactNumber(kpis.profileViews.value) : dash} delta={insightsAvailable && kpis.profileViews.change ? kpis.profileViews.change.replace(/^[+-]/, '') : undefined} deltaPositive={insightsAvailable && kpis.profileViews.change ? !kpis.profileViews.change.startsWith("-") : true} />
+            <KpiCard label="Accounts engaged" icon={MousePointerClick} accent="blue" value={insightsAvailable ? compactNumber(kpis.engaged.value) : dash} delta={insightsAvailable && kpis.engaged.change ? kpis.engaged.change.replace(/^[+-]/, '') : undefined} deltaPositive={insightsAvailable && kpis.engaged.change ? !kpis.engaged.change.startsWith("-") : true} />
           </div>
           <div className="-mt-2 text-[10px] text-slate-600">
             Showing {win.label} ({win.from} to {win.to}); changes compare with {win.prevFrom} to {win.prevTo}. Reach is summed per day, so a person reached on several days counts each day. Facebook Pages add followers only for now.
@@ -494,7 +495,17 @@ export default function SocialDashboard() {
               ) : (
                 mounted && (
                   <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={series} margin={{ top: 10, right: 8, left: 0, bottom: 0 }}>
+                    <ComposedChart data={series} margin={{ top: 10, right: 8, left: 0, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="reachFill" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#34d399" stopOpacity={0.45} />
+                          <stop offset="100%" stopColor="#34d399" stopOpacity={0} />
+                        </linearGradient>
+                        <linearGradient id="viewsFill" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#8b5cf6" stopOpacity={0.45} />
+                          <stop offset="100%" stopColor="#8b5cf6" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
                       <CartesianGrid strokeDasharray="3 3" stroke="rgba(120,160,255,0.08)" vertical={false} />
                       <XAxis dataKey="label" tick={{ fill: "#7c8bb0", fontSize: 11 }} axisLine={{ stroke: "rgba(120,160,255,0.15)" }} tickLine={false} />
                       <YAxis tick={{ fill: "#7c8bb0", fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => compactNumber(v as number)} width={44} />
@@ -505,9 +516,9 @@ export default function SocialDashboard() {
                         contentStyle={{ background: "#11151f", border: "1px solid rgba(255,255,255,0.12)" }}
                       />
                       <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ fontSize: 12, color: "#9fb0d0", paddingBottom: 8 }} formatter={(v) => (v === "reach" ? "Reach" : "Views")} />
-                      <Line type="monotone" dataKey="reach" stroke="#34d399" strokeWidth={2.5} dot={false} />
-                      <Line type="monotone" dataKey="views" stroke="#8b5cf6" strokeWidth={2.5} dot={false} />
-                    </LineChart>
+                      <Area type="monotone" dataKey="reach" stroke="#34d399" strokeWidth={2.5} fill="url(#reachFill)" dot={false} activeDot={{ r: 5, fill: "#34d399", stroke: "#0b0e14", strokeWidth: 2 }} />
+                      <Area type="monotone" dataKey="views" stroke="#8b5cf6" strokeWidth={2.5} fill="url(#viewsFill)" dot={false} activeDot={{ r: 5, fill: "#8b5cf6", stroke: "#0b0e14", strokeWidth: 2 }} />
+                    </ComposedChart>
                   </ResponsiveContainer>
                 )
               )}
@@ -822,17 +833,3 @@ function HorizontalBars({ data, color }: { data: Slice[]; color: string }) {
   );
 }
 
-function Kpi({ label, value, change, icon: Icon, color }: { label: string; value: string; change: string | null; icon: typeof Users; color: string }) {
-  return (
-    <div className="rounded-xl border border-white/[0.06] bg-[#0f141e] p-5">
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-medium text-slate-400">{label}</span>
-        <Icon size={16} className={color} />
-      </div>
-      <div className="mt-4 flex items-end justify-between gap-2">
-        <span className="text-2xl font-bold text-white">{value}</span>
-        {change && <span className={`text-xs font-semibold ${change.startsWith("-") ? "text-rose-400" : "text-emerald-400"}`}>{change}</span>}
-      </div>
-    </div>
-  );
-}
