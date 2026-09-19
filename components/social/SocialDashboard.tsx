@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Users, TrendingUp, Eye, UserCheck, MousePointerClick, RefreshCw, Loader2, AlertTriangle, ExternalLink, Filter, Camera, ThumbsUp, History } from "lucide-react";
-import { ResponsiveContainer, LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from "recharts";
+import { ResponsiveContainer, LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from "recharts";
 import CustomSelect from "@/components/CustomSelect";
 import { compactNumber, formatNumber } from "@/lib/format";
 
@@ -27,6 +27,14 @@ interface Post {
   comments_count: number | null;
 }
 
+interface Demo {
+  audience: "followers" | "engaged";
+  breakdown: "age" | "gender" | "city" | "country";
+  key: string;
+  value: number;
+  month: string;
+}
+
 interface Account {
   accountId: string;
   clientId: string;
@@ -36,6 +44,7 @@ interface Account {
   externalId: string;
   snapshots: Snapshot[];
   posts: Post[];
+  demographics: Demo[];
 }
 
 interface Status {
@@ -74,37 +83,37 @@ interface Window {
   label: string;
 }
 
-// The comparison period is always the same length, directly before the chosen one.
-function windowFor(range: string): Window {
-  const yesterday = isoDaysAgo(1);
-  let from: string;
-  let to: string;
-  let label: string;
-
-  if (range === "mtd") {
-    from = `${yesterday.slice(0, 7)}-01`;
-    to = yesterday;
-    label = "this month so far";
-  } else if (range === "lastmonth") {
-    const firstThis = new Date(`${yesterday.slice(0, 7)}-01T00:00:00Z`);
-    to = iso(new Date(firstThis.getTime() - DAY));
-    from = `${to.slice(0, 7)}-01`;
-    label = "last month";
-  } else {
-    const n = Number(range);
-    from = isoDaysAgo(n);
-    to = yesterday;
-    label = `last ${n} days`;
-  }
-
-  const len = Math.max(1, spanDays(from, to));
-  const prevTo = shift(from, -1);
-  return { from, to, prevFrom: shift(prevTo, -(len - 1)), prevTo, label };
-}
+const MONTHS_ID = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
 
 function monthLabel(ym: string): string {
   const [y, m] = ym.split("-").map(Number);
-  return new Date(y, m - 1, 1).toLocaleDateString("en-US", { month: "short", year: "numeric" });
+  return `${MONTHS_ID[m - 1]} ${y}`;
+}
+
+// "7" / "30" = that many days ending yesterday, compared with the same number
+// of days before. "YYYY-MM" = that calendar month (up to yesterday if it is
+// still running), compared with the same number of days at the start of the
+// previous month so a half-finished month isn't judged against a full one.
+function windowFor(range: string): Window {
+  const yesterday = isoDaysAgo(1);
+
+  if (/^\d{4}-\d{2}$/.test(range)) {
+    const [y, m] = range.split("-").map(Number);
+    const from = `${range}-01`;
+    const monthEnd = iso(new Date(Date.UTC(y, m, 0)));
+    const to = monthEnd > yesterday ? yesterday : monthEnd;
+    const len = spanDays(from, to);
+
+    const prevFrom = iso(new Date(Date.UTC(y, m - 2, 1)));
+    const prevMonthEnd = iso(new Date(Date.UTC(y, m - 1, 0)));
+    const prevTo = len <= 0 ? shift(prevFrom, -1) : shift(prevFrom, len - 1) > prevMonthEnd ? prevMonthEnd : shift(prevFrom, len - 1);
+    return { from, to, prevFrom, prevTo, label: monthLabel(range) };
+  }
+
+  const n = Number(range);
+  const from = isoDaysAgo(n);
+  const prevTo = shift(from, -1);
+  return { from, to: yesterday, prevFrom: shift(prevTo, -(n - 1)), prevTo, label: `last ${n} days` };
 }
 
 function pctChange(now: number, before: number): string | null {
@@ -133,6 +142,9 @@ export default function SocialDashboard() {
   const [platformFilter, setPlatformFilter] = useState("all");
   const [accountFilter, setAccountFilter] = useState("all");
   const [range, setRange] = useState("30");
+  const [audience, setAudience] = useState<"followers" | "engaged">("followers");
+  const autoSyncedRef = useRef(false);
+  const [autoSyncing, setAutoSyncing] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [mounted, setMounted] = useState(false);
@@ -155,6 +167,24 @@ export default function SocialDashboard() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // The daily job (09:30 WIB) normally keeps everything current. If nothing
+  // newer than the day before yesterday is stored — a missed run, or the first
+  // visit after linking accounts — refresh quietly once when the page opens.
+  useEffect(() => {
+    if (loading || autoSyncedRef.current || accounts.length === 0) return;
+    autoSyncedRef.current = true;
+    const newest = accounts.flatMap((a) => a.snapshots.map((s) => s.snapshot_date)).sort().pop();
+    if (newest && newest >= isoDaysAgo(1)) return;
+
+    setAutoSyncing(true);
+    fetch("/api/social/sync", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ days: 7 }) })
+      .catch(() => null)
+      .finally(() => {
+        setAutoSyncing(false);
+        load();
+      });
+  }, [loading, accounts, load]);
 
   async function syncNow(days: number) {
     setSyncing(true);
@@ -207,6 +237,24 @@ export default function SocialDashboard() {
   );
 
   const win = useMemo(() => windowFor(range), [range]);
+
+  // Last 7 / 30 days, then Januari–Desember of this year, then any earlier
+  // month that already has stored data.
+  const durationOptions = useMemo(() => {
+    const year = new Date().getUTCFullYear();
+    const opts = [
+      { value: "7", label: "Last 7 days" },
+      { value: "30", label: "Last 30 days" },
+      ...MONTHS_ID.map((name, i) => ({ value: `${year}-${String(i + 1).padStart(2, "0")}`, label: `${name} ${year}` })),
+    ];
+    const listed = new Set(opts.map((o) => o.value));
+    const earlier = new Set<string>();
+    for (const a of accounts) for (const s of a.snapshots) if (!listed.has(s.snapshot_date.slice(0, 7))) earlier.add(s.snapshot_date.slice(0, 7));
+    [...earlier].sort().reverse().forEach((ym) => opts.push({ value: ym, label: monthLabel(ym) }));
+    return opts;
+  }, [accounts]);
+
+  const dataThrough = useMemo(() => selected.flatMap((a) => a.snapshots.map((s) => s.snapshot_date)).sort().pop() ?? null, [selected]);
   const insightsAvailable = selected.some(hasInsights);
 
   const kpis = useMemo(() => {
@@ -306,6 +354,27 @@ export default function SocialDashboard() {
       .slice(0, 10);
   }, [selected, win]);
 
+  // Audience: summed across the selected Instagram accounts that have a reading.
+  const audienceData = useMemo(() => {
+    const ig = selected.filter((a) => a.platform === "instagram");
+    const has = (a: Account) => a.demographics.some((d) => d.audience === audience);
+    const withData = ig.filter(has);
+    const sumBy = (b: Demo["breakdown"]) => {
+      const m = new Map<string, number>();
+      for (const a of withData) for (const d of a.demographics) if (d.audience === audience && d.breakdown === b) m.set(d.key, (m.get(d.key) ?? 0) + d.value);
+      return m;
+    };
+    return {
+      age: slices(sumBy("age"), (k) => k, AGE_ORDER),
+      gender: slices(sumBy("gender"), (k) => GENDER_LABEL[k] ?? k),
+      city: slices(sumBy("city"), (k) => k.split(",")[0], undefined, 10),
+      country: slices(sumBy("country"), regionName, undefined, 10),
+      withData,
+      without: ig.filter((a) => !has(a)),
+      month: withData.flatMap((a) => a.demographics.map((d) => d.month)).sort().pop() ?? null,
+    };
+  }, [selected, audience]);
+
   const hasData = accounts.some((a) => a.snapshots.length > 0);
   const setupNeeded = status && (!status.ok || !status.configured || !status.ready);
   const dash = "—";
@@ -365,15 +434,7 @@ export default function SocialDashboard() {
           className="min-w-[150px]"
           value={range}
           onChange={setRange}
-          options={[
-            { value: "7", label: "Last 7 days" },
-            { value: "14", label: "Last 14 days" },
-            { value: "30", label: "Last 30 days" },
-            { value: "60", label: "Last 60 days" },
-            { value: "90", label: "Last 90 days" },
-            { value: "mtd", label: "This month" },
-            { value: "lastmonth", label: "Last month" },
-          ]}
+          options={durationOptions}
         />
         <div className="ml-auto flex items-center gap-2">
           <button
@@ -393,6 +454,19 @@ export default function SocialDashboard() {
             {syncing ? <Loader2 size={13} className="animate-spin" /> : <History size={13} />} Backfill 90 days
           </button>
         </div>
+      </div>
+
+      <div className="-mt-2 flex flex-wrap items-center gap-1.5 px-1 text-[10px] text-slate-500">
+        {autoSyncing ? (
+          <>
+            <Loader2 size={10} className="animate-spin" /> Updating from Instagram…
+          </>
+        ) : dataThrough ? (
+          <>Data saved through {dataThrough}.</>
+        ) : (
+          <>No data saved yet.</>
+        )}
+        <span>It updates by itself every day at 09:30 WIB and is kept permanently in our database, so the month-by-month history keeps growing — no need to press Sync.</span>
       </div>
 
       {syncMsg && (
@@ -426,7 +500,7 @@ export default function SocialDashboard() {
             <Kpi label="Accounts engaged" icon={MousePointerClick} color="text-rose-400" value={insightsAvailable ? compactNumber(kpis.engaged.value) : dash} change={insightsAvailable ? kpis.engaged.change : null} />
           </div>
           <div className="-mt-2 text-[10px] text-slate-600">
-            Showing {win.label} ({win.from} to {win.to}); changes compare with the {spanDays(win.prevFrom, win.prevTo)} days before. Reach is summed per day, so a person reached on several days counts each day. Facebook Pages add followers only for now.
+            Showing {win.label} ({win.from} to {win.to}); changes compare with {win.prevFrom} to {win.prevTo}. Reach is summed per day, so a person reached on several days counts each day. Facebook Pages add followers only for now.
             {!insightsAvailable && " “—” means no insights are stored for the selected accounts yet (see the account table below)."}
           </div>
 
@@ -533,6 +607,80 @@ export default function SocialDashboard() {
             </div>
           </div>
 
+          {/* Audience demographics — Instagram only, needs 100+ followers */}
+          <div className="glass-panel p-4 sm:p-5">
+            <div className="mb-1 flex flex-wrap items-center gap-3">
+              <h3 className="text-sm font-semibold text-slate-100">Audience</h3>
+              <div className="flex rounded-lg bg-white/[0.05] p-0.5 text-[11px] font-semibold">
+                {(["followers", "engaged"] as const).map((a) => (
+                  <button
+                    key={a}
+                    onClick={() => setAudience(a)}
+                    className={`rounded-md px-3 py-1 ${audience === a ? "bg-cyan-500/20 text-cyan-300" : "text-slate-400 hover:text-slate-200"}`}
+                  >
+                    {a === "followers" ? "Followers" : "Engaged audience"}
+                  </button>
+                ))}
+              </div>
+              {audienceData.month && <span className="text-[10px] text-slate-500">Latest reading: {monthLabel(audienceData.month)}</span>}
+            </div>
+            <div className="mb-4 text-[10px] text-slate-500">
+              Age, gender, city and country of {audience === "followers" ? "the people who follow" : "the people who engaged with"} the selected Instagram accounts. Instagram only provides this for accounts with 100+ followers, and only as a current picture, so we save one reading a month. Percentages are shares of the people Instagram could place.
+            </div>
+
+            {audienceData.withData.length === 0 ? (
+              <div className="rounded-lg bg-white/[0.03] p-6 text-center text-xs text-slate-500">
+                No audience data stored for the selected accounts yet. It appears after the next sync for accounts with 100+ followers.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                <ChartBlock title="Age">
+                  {mounted && (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={audienceData.age} margin={{ top: 10, right: 8, left: 0, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(120,160,255,0.08)" vertical={false} />
+                        <XAxis dataKey="name" tick={{ fill: "#7c8bb0", fontSize: 11 }} axisLine={{ stroke: "rgba(120,160,255,0.15)" }} tickLine={false} />
+                        <YAxis tick={{ fill: "#7c8bb0", fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => `${Math.round(Number(v))}%`} width={40} />
+                        <Tooltip {...tooltipStyle} formatter={sliceTooltip} />
+                        <Bar dataKey="pct" fill="#22d3ee" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )}
+                </ChartBlock>
+
+                <ChartBlock title="Gender">
+                  {mounted && (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie data={audienceData.gender} dataKey="value" nameKey="name" innerRadius={55} outerRadius={90} paddingAngle={2}>
+                          {audienceData.gender.map((g) => (
+                            <Cell key={g.name} fill={GENDER_COLOR[g.name] ?? "#a78bfa"} />
+                          ))}
+                        </Pie>
+                        <Tooltip {...tooltipStyle} formatter={sliceTooltip} />
+                        <Legend verticalAlign="bottom" iconType="circle" wrapperStyle={{ fontSize: 12, color: "#9fb0d0" }} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  )}
+                </ChartBlock>
+
+                <ChartBlock title="Top cities" tall>
+                  {mounted && <HorizontalBars data={audienceData.city} color="#34d399" />}
+                </ChartBlock>
+
+                <ChartBlock title="Top countries" tall>
+                  {mounted && <HorizontalBars data={audienceData.country} color="#8b5cf6" />}
+                </ChartBlock>
+              </div>
+            )}
+
+            {audienceData.without.length > 0 && (
+              <div className="mt-4 text-[10px] text-amber-400/80">
+                No audience data for {audienceData.without.map((a) => a.handle || a.externalId).join(", ")} — Instagram provides demographics only for accounts with 100+ followers.
+              </div>
+            )}
+          </div>
+
           <div className="glass-panel overflow-x-auto p-4 sm:p-5">
             <h3 className="mb-3 text-sm font-semibold text-slate-100">By account ({win.label})</h3>
             <table className="w-full min-w-[820px] border-collapse text-xs">
@@ -623,6 +771,72 @@ export default function SocialDashboard() {
         </>
       )}
     </div>
+  );
+}
+
+interface Slice {
+  name: string;
+  full: string;
+  value: number;
+  pct: number;
+}
+
+const AGE_ORDER = ["13-17", "18-24", "25-34", "35-44", "45-54", "55-64", "65+"];
+const GENDER_LABEL: Record<string, string> = { F: "Female", M: "Male", U: "Unspecified" };
+const GENDER_COLOR: Record<string, string> = { Female: "#f472b6", Male: "#60a5fa", Unspecified: "#94a3b8" };
+
+function regionName(code: string): string {
+  try {
+    return new Intl.DisplayNames(["en"], { type: "region" }).of(code) ?? code;
+  } catch {
+    return code;
+  }
+}
+
+// Turns raw counts into chart slices. Percentages are taken against everything
+// Instagram returned, so "top 10 cities" still shows each city's true share.
+function slices(map: Map<string, number>, label: (k: string) => string, order?: string[], top?: number): Slice[] {
+  const total = [...map.values()].reduce((a, b) => a + b, 0);
+  const rank = (k: string) => (order && order.includes(k) ? order.indexOf(k) : 99);
+  let entries = [...map.entries()];
+  entries = order ? entries.sort((a, b) => rank(a[0]) - rank(b[0])) : entries.sort((a, b) => b[1] - a[1]);
+  if (top) entries = entries.slice(0, top);
+  return entries.map(([k, v]) => ({ name: label(k), full: k, value: v, pct: total ? (v / total) * 100 : 0 }));
+}
+
+const tooltipStyle = {
+  labelStyle: { color: "#e5e9f0" },
+  itemStyle: { color: "#e5e9f0" },
+  contentStyle: { background: "#11151f", border: "1px solid rgba(255,255,255,0.12)" },
+};
+
+// Recharts hands the tooltip both the plotted value and the original slice.
+const sliceTooltip = (value: unknown, _name: unknown, item: unknown): [string, string] => {
+  const s = (item as { payload?: Slice }).payload;
+  return [`${s ? formatNumber(s.value) : ""} (${Number(s?.pct ?? value).toFixed(1)}%)`, "People"];
+};
+
+function ChartBlock({ title, tall, children }: { title: string; tall?: boolean; children: React.ReactNode }) {
+  return (
+    <div>
+      <div className="mb-2 text-xs font-semibold text-slate-300">{title}</div>
+      <div className={tall ? "h-[300px]" : "h-[240px]"}>{children}</div>
+    </div>
+  );
+}
+
+function HorizontalBars({ data, color }: { data: Slice[]; color: string }) {
+  if (data.length === 0) return <div className="grid h-full place-items-center text-xs text-slate-500">No data</div>;
+  return (
+    <ResponsiveContainer width="100%" height="100%">
+      <BarChart data={data} layout="vertical" margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke="rgba(120,160,255,0.08)" horizontal={false} />
+        <XAxis type="number" tick={{ fill: "#7c8bb0", fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => `${Math.round(Number(v))}%`} />
+        <YAxis type="category" dataKey="name" width={130} tick={{ fill: "#9fb0d0", fontSize: 11 }} axisLine={false} tickLine={false} />
+        <Tooltip {...tooltipStyle} formatter={sliceTooltip} />
+        <Bar dataKey="pct" fill={color} radius={[0, 4, 4, 0]} />
+      </BarChart>
+    </ResponsiveContainer>
   );
 }
 

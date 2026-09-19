@@ -1,11 +1,13 @@
 import { db } from "@/lib/supabase/db";
-import { fetchProfile, fetchDayInsights, fetchRecentMedia } from "./instagram";
+import { fetchProfile, fetchDayInsights, fetchRecentMedia, fetchDemographics, AUDIENCES, BREAKDOWNS } from "./instagram";
 
 export interface SyncResult {
   igUserId: string;
   username: string;
   daysStored: number;
   postsStored: number;
+  demographicsStored: number;
+  demographicsNote?: string;
   errors: string[];
 }
 
@@ -75,5 +77,36 @@ export async function syncInstagramAccount(igUserId: string, days: number): Prom
     errors.push(`posts: ${(err as Error).message}`);
   }
 
-  return { igUserId, username: profile.username, daysStored: rows.length, postsStored, errors };
+  // Audience demographics: a current picture only, kept once per month (the
+  // latest reading that month wins). Instagram refuses accounts under 100
+  // followers, so those are skipped with a note rather than an error.
+  let demographicsStored = 0;
+  let demographicsNote: string | undefined;
+  if (profile.followers_count < 100) {
+    demographicsNote = "needs 100+ followers for demographics";
+  } else {
+    const month = new Date().toISOString().slice(0, 7);
+    const jobs = AUDIENCES.flatMap((audience) => BREAKDOWNS.map((breakdown) => ({ audience, breakdown })));
+    const settled = await Promise.allSettled(jobs.map((j) => fetchDemographics(igUserId, j.audience, j.breakdown)));
+
+    for (let i = 0; i < jobs.length; i++) {
+      const r = settled[i];
+      const { audience, breakdown } = jobs[i];
+      if (r.status === "rejected") {
+        errors.push(`demographics: ${(r.reason as Error).message}`);
+        continue;
+      }
+      if (r.value.length === 0) continue;
+
+      // Replace the month's earlier reading so keys that dropped out don't linger.
+      await db.from("instagram_demographics").delete().match({ ig_user_id: igUserId, snapshot_month: month, audience, breakdown });
+      const { error } = await db.from("instagram_demographics").insert(
+        r.value.map((d) => ({ ig_user_id: igUserId, snapshot_month: month, audience, breakdown, key: d.key, value: Math.round(d.value) }))
+      );
+      if (error) errors.push(`demographics: ${error.message}`);
+      else demographicsStored += r.value.length;
+    }
+  }
+
+  return { igUserId, username: profile.username, daysStored: rows.length, postsStored, demographicsStored, demographicsNote, errors };
 }

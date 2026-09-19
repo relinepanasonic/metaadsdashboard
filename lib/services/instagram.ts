@@ -122,3 +122,47 @@ export async function fetchRecentMedia(igUserId: string, limit = 30): Promise<Ig
   });
   return json.data;
 }
+
+export type Audience = "followers" | "engaged";
+export type Breakdown = "age" | "gender" | "city" | "country";
+
+export const AUDIENCES: Audience[] = ["followers", "engaged"];
+export const BREAKDOWNS: Breakdown[] = ["age", "gender", "city", "country"];
+
+const DEMOGRAPHIC_METRIC: Record<Audience, string> = {
+  followers: "follower_demographics",
+  engaged: "engaged_audience_demographics",
+};
+
+export interface DemographicRow {
+  key: string;
+  value: number;
+}
+
+// Which timeframe a metric accepts has varied between Graph API versions, so
+// each is tried in turn. Errors that mean "you can't get this" (too few
+// followers, missing permission) stop immediately instead of burning retries.
+export async function fetchDemographics(igUserId: string, audience: Audience, breakdown: Breakdown): Promise<DemographicRow[]> {
+  const attempts: (string | undefined)[] = audience === "followers" ? [undefined, "last_30_days", "this_month"] : ["last_30_days", undefined, "this_month"];
+  let lastError: unknown = null;
+
+  for (const timeframe of attempts) {
+    try {
+      const json = await graph<{
+        data: { total_value?: { breakdowns?: { results?: { dimension_values: string[]; value: number }[] }[] } }[];
+      }>(`/${igUserId}/insights`, {
+        metric: DEMOGRAPHIC_METRIC[audience],
+        period: "lifetime",
+        metric_type: "total_value",
+        breakdown,
+        ...(timeframe ? { timeframe } : {}),
+      });
+      const results = json.data[0]?.total_value?.breakdowns?.[0]?.results ?? [];
+      return results.map((r) => ({ key: r.dimension_values.join(" / "), value: r.value }));
+    } catch (err) {
+      lastError = err;
+      if (/at least 100|100 followers|minimum|permission|\(#10\)|\(#200\)/i.test((err as Error).message)) break;
+    }
+  }
+  throw lastError;
+}

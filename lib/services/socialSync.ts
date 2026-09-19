@@ -45,7 +45,7 @@ export async function syncAccounts(
       if (account.platform === "instagram") {
         const r = await syncInstagramAccount(account.external_id, days);
         const errs = [...new Set(r.errors)].slice(0, 2).join(" · ");
-        results.push({ client: clientName, platform: "instagram", account: label, summary: `${r.daysStored} days, ${r.postsStored} posts${errs ? ` (${errs})` : ""}` });
+        results.push({ client: clientName, platform: "instagram", account: label, summary: `${r.daysStored} days, ${r.postsStored} posts, ${r.demographicsNote ? r.demographicsNote : r.demographicsStored + " audience rows"}${errs ? ` (${errs})` : ""}` });
       } else {
         const r = await syncFacebookPage(account.external_id);
         const errs = [...new Set(r.errors)].slice(0, 2).join(" · ");

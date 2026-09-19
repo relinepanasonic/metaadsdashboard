@@ -33,6 +33,14 @@ interface Snap {
   total_interactions: number | null;
 }
 
+interface DemoOut {
+  audience: string;
+  breakdown: string;
+  key: string;
+  value: number;
+  month: string;
+}
+
 interface PostOut {
   media_id: string;
   caption: string | null;
@@ -62,7 +70,7 @@ export async function GET() {
     // Posts are only shown for the recent ranges, so don't drag years of them along.
     const postsSince = `${isoDaysAgo(120)}T00:00:00Z`;
 
-    const [igSnaps, igPosts, fbSnaps, fbPosts] = await Promise.all([
+    const [igSnaps, igPosts, fbSnaps, fbPosts, igDemo] = await Promise.all([
       igIds.length
         ? fetchAll<Snap & { ig_user_id: string }>((f, t) =>
             db!.from("instagram_snapshots").select("ig_user_id,snapshot_date,followers_count,reach,views,profile_views,accounts_engaged,total_interactions").in("ig_user_id", igIds).gte("snapshot_date", since).order("snapshot_date", { ascending: true }).range(f, t)
@@ -83,14 +91,30 @@ export async function GET() {
             db!.from("facebook_posts").select("post_id,page_id,message,permalink,posted_at,reactions_count,comments_count").in("page_id", fbIds).gte("posted_at", postsSince).order("posted_at", { ascending: false }).range(f, t)
           )
         : Promise.resolve([] as { post_id: string; page_id: string; message: string | null; permalink: string | null; posted_at: string | null; reactions_count: number | null; comments_count: number | null }[]),
+      // Only the last two months are read: each account's newest reading is all the page shows.
+      igIds.length
+        ? fetchAll<{ ig_user_id: string; snapshot_month: string; audience: string; breakdown: string; key: string; value: number }>((f, t) =>
+            db!.from("instagram_demographics").select("ig_user_id,snapshot_month,audience,breakdown,key,value").in("ig_user_id", igIds).gte("snapshot_month", isoDaysAgo(62).slice(0, 7)).range(f, t)
+          ).catch(() => [] as { ig_user_id: string; snapshot_month: string; audience: string; breakdown: string; key: string; value: number }[]) // table missing until migration 0017 is run — audience just stays empty
+        : Promise.resolve([] as { ig_user_id: string; snapshot_month: string; audience: string; breakdown: string; key: string; value: number }[]),
     ]);
 
     const accounts = rows.map(({ account, clientName }) => {
       let snapshots: Snap[];
       let posts: PostOut[];
+      let demographics: DemoOut[] = [];
       if (account.platform === "instagram") {
         snapshots = igSnaps.filter((s) => s.ig_user_id === account.external_id);
         posts = igPosts.filter((p) => p.ig_user_id === account.external_id);
+        const mine = igDemo.filter((d) => d.ig_user_id === account.external_id);
+        const newest = new Map<string, string>();
+        for (const d of mine) {
+          const k = `${d.audience}|${d.breakdown}`;
+          if (!newest.has(k) || d.snapshot_month > newest.get(k)!) newest.set(k, d.snapshot_month);
+        }
+        demographics = mine
+          .filter((d) => newest.get(`${d.audience}|${d.breakdown}`) === d.snapshot_month)
+          .map((d) => ({ audience: d.audience, breakdown: d.breakdown, key: d.key, value: d.value, month: d.snapshot_month }));
       } else {
         snapshots = fbSnaps
           .filter((s) => s.page_id === account.external_id)
@@ -108,6 +132,7 @@ export async function GET() {
         externalId: account.external_id,
         snapshots,
         posts,
+        demographics,
       };
     });
 
