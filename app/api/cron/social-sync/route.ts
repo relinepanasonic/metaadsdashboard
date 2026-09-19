@@ -3,9 +3,10 @@ import { loadAccounts, syncAccounts } from "@/lib/services/socialSync";
 
 export const maxDuration = 300;
 
-// Daily (see vercel.json): stores the last 2 completed days for every linked
-// Instagram account and Facebook Page. Two days rather than one so a missed
-// run or late-arriving numbers self-heal.
+// Daily (see vercel.json): stores the last 7 completed days for every linked
+// Instagram account and Facebook Page. A week rather than one day so
+// missed runs or late-arriving numbers self-heal; days already stored are
+// simply overwritten with the fresher values.
 export async function GET(req: NextRequest) {
   const auth = req.headers.get("authorization");
   if (!process.env.CRON_SECRET || auth !== `Bearer ${process.env.CRON_SECRET}`) {
@@ -13,7 +14,7 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    return NextResponse.json({ ok: true, results: await syncAccounts(await loadAccounts(), 2) });
+    return NextResponse.json({ ok: true, results: await syncAccounts(await loadAccounts(), 7) });
   } catch (err) {
     return NextResponse.json({ ok: false, error: (err as Error).message }, { status: 500 });
   }

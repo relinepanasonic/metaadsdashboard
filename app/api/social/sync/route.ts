@@ -4,7 +4,7 @@ import { loadAccounts, syncAccounts } from "@/lib/services/socialSync";
 
 export const maxDuration = 300;
 
-// Manual "Sync now" from the Social Media page. Instagram backfills up to 60
+// Manual "Sync now" from the Social Media page. Instagram backfills up to 90
 // days. Without a clientId it syncs every linked account, otherwise just that
 // client's Instagram accounts and Facebook Pages.
 export async function POST(req: NextRequest) {
@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
   if (!me || me.role === "client") return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
 
   const { clientId, days } = (await req.json().catch(() => ({}))) as { clientId?: string; days?: number };
-  const span = Math.max(1, Math.min(60, Math.round(days ?? 30)));
+  const span = Math.max(1, Math.min(90, Math.round(days ?? 30)));
 
   try {
     const rows = await loadAccounts(clientId);

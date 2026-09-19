@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Users, TrendingUp, Eye, UserCheck, MousePointerClick, RefreshCw, Loader2, AlertTriangle, ExternalLink, Filter, Camera, ThumbsUp } from "lucide-react";
-import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from "recharts";
+import { Users, TrendingUp, Eye, UserCheck, MousePointerClick, RefreshCw, Loader2, AlertTriangle, ExternalLink, Filter, Camera, ThumbsUp, History } from "lucide-react";
+import { ResponsiveContainer, LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from "recharts";
 import CustomSelect from "@/components/CustomSelect";
 import { compactNumber, formatNumber } from "@/lib/format";
 
@@ -48,16 +48,63 @@ interface Status {
 
 type MetricKey = "reach" | "views" | "profile_views" | "accounts_engaged" | "total_interactions";
 
-function isoDaysAgo(n: number): string {
-  const d = new Date();
-  d.setUTCDate(d.getUTCDate() - n);
+const DAY = 86_400_000;
+
+function iso(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
-function sum(accounts: Account[], from: string, to: string, key: MetricKey): number {
-  let total = 0;
-  for (const a of accounts) for (const s of a.snapshots) if (s.snapshot_date >= from && s.snapshot_date <= to) total += s[key] ?? 0;
-  return total;
+function isoDaysAgo(n: number): string {
+  return iso(new Date(Date.now() - n * DAY));
+}
+
+function shift(date: string, days: number): string {
+  return iso(new Date(new Date(`${date}T00:00:00Z`).getTime() + days * DAY));
+}
+
+function spanDays(from: string, to: string): number {
+  return Math.round((new Date(`${to}T00:00:00Z`).getTime() - new Date(`${from}T00:00:00Z`).getTime()) / DAY) + 1;
+}
+
+interface Window {
+  from: string;
+  to: string;
+  prevFrom: string;
+  prevTo: string;
+  label: string;
+}
+
+// The comparison period is always the same length, directly before the chosen one.
+function windowFor(range: string): Window {
+  const yesterday = isoDaysAgo(1);
+  let from: string;
+  let to: string;
+  let label: string;
+
+  if (range === "mtd") {
+    from = `${yesterday.slice(0, 7)}-01`;
+    to = yesterday;
+    label = "this month so far";
+  } else if (range === "lastmonth") {
+    const firstThis = new Date(`${yesterday.slice(0, 7)}-01T00:00:00Z`);
+    to = iso(new Date(firstThis.getTime() - DAY));
+    from = `${to.slice(0, 7)}-01`;
+    label = "last month";
+  } else {
+    const n = Number(range);
+    from = isoDaysAgo(n);
+    to = yesterday;
+    label = `last ${n} days`;
+  }
+
+  const len = Math.max(1, spanDays(from, to));
+  const prevTo = shift(from, -1);
+  return { from, to, prevFrom: shift(prevTo, -(len - 1)), prevTo, label };
+}
+
+function monthLabel(ym: string): string {
+  const [y, m] = ym.split("-").map(Number);
+  return new Date(y, m - 1, 1).toLocaleDateString("en-US", { month: "short", year: "numeric" });
 }
 
 function pctChange(now: number, before: number): string | null {
@@ -66,12 +113,25 @@ function pctChange(now: number, before: number): string | null {
   return `${p >= 0 ? "+" : ""}${p.toFixed(1)}%`;
 }
 
+function sum(accounts: Account[], from: string, to: string, key: MetricKey): number {
+  let total = 0;
+  for (const a of accounts) for (const s of a.snapshots) if (s.snapshot_date >= from && s.snapshot_date <= to) total += s[key] ?? 0;
+  return total;
+}
+
+function hasInsights(a: Account): boolean {
+  return a.snapshots.some((s) => s.reach != null);
+}
+
+const accountLabel = (a: Account) => `${a.handle || a.externalId} · ${a.platform === "instagram" ? "IG" : "FB"}`;
+
 export default function SocialDashboard() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [status, setStatus] = useState<Status | null>(null);
   const [loading, setLoading] = useState(true);
   const [clientFilter, setClientFilter] = useState("all");
   const [platformFilter, setPlatformFilter] = useState("all");
+  const [accountFilter, setAccountFilter] = useState("all");
   const [range, setRange] = useState("30");
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -96,13 +156,13 @@ export default function SocialDashboard() {
     load();
   }, [load]);
 
-  async function syncNow() {
+  async function syncNow(days: number) {
     setSyncing(true);
     setSyncMsg(null);
     const res = await fetch("/api/social/sync", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ clientId: clientFilter === "all" ? undefined : clientFilter, days: 30 }),
+      body: JSON.stringify({ clientId: clientFilter === "all" ? undefined : clientFilter, days }),
     })
       .then((r) => r.json())
       .catch(() => ({ ok: false, error: "Request failed" }));
@@ -112,35 +172,47 @@ export default function SocialDashboard() {
       setSyncMsg({ ok: false, text: res.error });
       return;
     }
-    const lines = (res.results as { client: string; platform: string; account: string; summary?: string; error?: string }[]).map((r) =>
-      r.error ? `${r.client} / ${r.account}: ${r.error}` : `${r.client} / ${r.account}: ${r.summary}`
-    );
-    const failed = (res.results as { error?: string }[]).some((r) => r.error);
-    setSyncMsg({ ok: !failed, text: lines.join(" · ") });
+    const results = res.results as { client: string; account: string; summary?: string; error?: string }[];
+    setSyncMsg({
+      ok: !results.some((r) => r.error),
+      text: results.map((r) => (r.error ? `${r.client} / ${r.account}: ${r.error}` : `${r.client} / ${r.account}: ${r.summary}`)).join(" · "),
+    });
     load();
   }
 
-  const days = Number(range);
-  const selected = useMemo(
-    () => accounts.filter((a) => (clientFilter === "all" || a.clientId === clientFilter) && (platformFilter === "all" || a.platform === platformFilter)),
-    [accounts, clientFilter, platformFilter]
-  );
   const clientOptions = useMemo(() => {
     const seen = new Map<string, string>();
     for (const a of accounts) seen.set(a.clientId, a.clientName);
     return [...seen.entries()].map(([value, label]) => ({ value, label }));
   }, [accounts]);
 
-  const win = useMemo(
-    () => ({ from: isoDaysAgo(days), to: isoDaysAgo(1), prevFrom: isoDaysAgo(days * 2), prevTo: isoDaysAgo(days + 1) }),
-    [days]
+  // Account list narrows with the client and platform picked above it.
+  const accountOptions = useMemo(
+    () =>
+      accounts
+        .filter((a) => (clientFilter === "all" || a.clientId === clientFilter) && (platformFilter === "all" || a.platform === platformFilter))
+        .map((a) => ({ value: a.accountId, label: accountLabel(a) })),
+    [accounts, clientFilter, platformFilter]
   );
+
+  const selected = useMemo(
+    () =>
+      accounts.filter(
+        (a) =>
+          (clientFilter === "all" || a.clientId === clientFilter) &&
+          (platformFilter === "all" || a.platform === platformFilter) &&
+          (accountFilter === "all" || a.accountId === accountFilter)
+      ),
+    [accounts, clientFilter, platformFilter, accountFilter]
+  );
+
+  const win = useMemo(() => windowFor(range), [range]);
+  const insightsAvailable = selected.some(hasInsights);
 
   const kpis = useMemo(() => {
     const metric = (key: MetricKey) => {
       const now = sum(selected, win.from, win.to, key);
-      const before = sum(selected, win.prevFrom, win.prevTo, key);
-      return { value: now, change: pctChange(now, before) };
+      return { value: now, change: pctChange(now, sum(selected, win.prevFrom, win.prevTo, key)) };
     };
 
     let followers = 0;
@@ -171,7 +243,7 @@ export default function SocialDashboard() {
     const byDate = new Map<string, { date: string; reach: number; views: number }>();
     for (const a of selected)
       for (const s of a.snapshots) {
-        if (s.snapshot_date < win.from || s.snapshot_date > win.to) continue;
+        if (s.snapshot_date < win.from || s.snapshot_date > win.to || s.reach == null) continue;
         const row = byDate.get(s.snapshot_date) ?? { date: s.snapshot_date, reach: 0, views: 0 };
         row.reach += s.reach ?? 0;
         row.views += s.views ?? 0;
@@ -180,16 +252,63 @@ export default function SocialDashboard() {
     return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date)).map((r) => ({ ...r, label: r.date.slice(5) }));
   }, [selected, win]);
 
+  // Month by month uses everything stored, independent of the Duration filter.
+  const monthly = useMemo(() => {
+    interface Row {
+      month: string;
+      reach: number;
+      views: number;
+      profile: number;
+      engaged: number;
+      interactions: number;
+      insights: boolean;
+      followers: Map<string, { date: string; value: number }>;
+    }
+    const map = new Map<string, Row>();
+    for (const a of selected)
+      for (const s of a.snapshots) {
+        const m = s.snapshot_date.slice(0, 7);
+        const row = map.get(m) ?? { month: m, reach: 0, views: 0, profile: 0, engaged: 0, interactions: 0, insights: false, followers: new Map() };
+        if (s.reach != null) row.insights = true;
+        row.reach += s.reach ?? 0;
+        row.views += s.views ?? 0;
+        row.profile += s.profile_views ?? 0;
+        row.engaged += s.accounts_engaged ?? 0;
+        row.interactions += s.total_interactions ?? 0;
+        if (s.followers_count != null) {
+          const cur = row.followers.get(a.accountId);
+          if (!cur || s.snapshot_date > cur.date) row.followers.set(a.accountId, { date: s.snapshot_date, value: s.followers_count });
+        }
+        map.set(m, row);
+      }
+
+    const rows = [...map.values()].sort((a, b) => a.month.localeCompare(b.month));
+    return rows.map((r, i) => {
+      const followers = [...r.followers.values()].reduce((t, f) => t + f.value, 0);
+      const prev = i > 0 ? rows[i - 1] : null;
+      const prevFollowers = prev ? [...prev.followers.values()].reduce((t, f) => t + f.value, 0) : 0;
+      return {
+        ...r,
+        followersEnd: r.followers.size > 0 ? followers : null,
+        followerGrowth: prev && r.followers.size > 0 && prev.followers.size > 0 ? followers - prevFollowers : null,
+        reachChange: prev && r.insights && prev.insights ? pctChange(r.reach, prev.reach) : null,
+        label: monthLabel(r.month),
+        partial: r.month === isoDaysAgo(1).slice(0, 7),
+      };
+    });
+  }, [selected]);
+
   const topPosts = useMemo(() => {
     const cutoff = `${win.from}T00:00:00Z`;
     return selected
-      .flatMap((a) => a.posts.filter((p) => p.posted_at && p.posted_at >= cutoff).map((p) => ({ ...p, account: a.handle || a.clientName })))
+      .flatMap((a) => a.posts.filter((p) => p.posted_at && p.posted_at >= cutoff && p.posted_at <= `${win.to}T23:59:59Z`).map((p) => ({ ...p, account: a.handle || a.clientName })))
       .sort((a, b) => (b.like_count ?? 0) + (b.comments_count ?? 0) - ((a.like_count ?? 0) + (a.comments_count ?? 0)))
       .slice(0, 10);
   }, [selected, win]);
 
   const hasData = accounts.some((a) => a.snapshots.length > 0);
   const setupNeeded = status && (!status.ok || !status.configured || !status.ready);
+  const dash = "—";
 
   if (loading) return <div className="glass-panel p-6 text-center text-xs text-slate-500">Loading social data&hellip;</div>;
 
@@ -199,31 +318,37 @@ export default function SocialDashboard() {
         <div className="glass-panel flex items-start gap-3 p-4" style={{ boxShadow: "inset 0 0 0 1px rgba(251,191,36,0.3)" }}>
           <AlertTriangle size={18} className="mt-0.5 shrink-0 text-amber-400" />
           <div className="min-w-0 text-xs text-slate-400">
-            <div className="text-sm font-semibold text-amber-300">Instagram isn&apos;t connected to the Meta token yet</div>
+            <div className="text-sm font-semibold text-amber-300">Instagram insights aren&apos;t unlocked yet</div>
             {status?.error ? (
               <div className="mt-1">Couldn&apos;t check the token: {status.error}</div>
             ) : (
               <div className="mt-1">
-                The token is missing <strong className="text-slate-300">{(status?.missing ?? ["instagram_basic", "instagram_manage_insights"]).join(", ")}</strong>. Add them to the Meta app, assign the token&apos;s user to each Instagram account in Business Settings, then update <code className="rounded bg-white/[0.06] px-1">META_ACCESS_TOKEN</code> in Vercel.
+                Until then only follower counts are saved — reach, views, profile visits and posts stay empty. The token is missing <strong className="text-slate-300">{(status?.missing ?? ["instagram_basic", "instagram_manage_insights"]).join(", ")}</strong>. Add them to the Meta app, assign the token&apos;s user to each Instagram account in Business Settings, update <code className="rounded bg-white/[0.06] px-1">META_ACCESS_TOKEN</code> in Vercel, then use <strong className="text-slate-300">Backfill 90 days</strong>.
               </div>
             )}
           </div>
         </div>
       )}
 
-      {/* Filters + sync */}
+      {/* Filters: Client | Platform | Account | Duration */}
       <div className="glass-panel flex flex-wrap items-center gap-3 p-3">
         <Filter size={14} className="shrink-0 text-cyan-400" />
         <CustomSelect
-          className="min-w-[180px]"
+          className="min-w-[160px]"
           value={clientFilter}
-          onChange={setClientFilter}
+          onChange={(v) => {
+            setClientFilter(v);
+            setAccountFilter("all");
+          }}
           options={[{ value: "all", label: "All clients", accent: true }, ...clientOptions]}
         />
         <CustomSelect
-          className="min-w-[150px]"
+          className="min-w-[140px]"
           value={platformFilter}
-          onChange={setPlatformFilter}
+          onChange={(v) => {
+            setPlatformFilter(v);
+            setAccountFilter("all");
+          }}
           options={[
             { value: "all", label: "All platforms" },
             { value: "instagram", label: "Instagram" },
@@ -231,7 +356,13 @@ export default function SocialDashboard() {
           ]}
         />
         <CustomSelect
-          className="min-w-[140px]"
+          className="min-w-[190px]"
+          value={accountFilter}
+          onChange={setAccountFilter}
+          options={[{ value: "all", label: "All accounts" }, ...accountOptions]}
+        />
+        <CustomSelect
+          className="min-w-[150px]"
           value={range}
           onChange={setRange}
           options={[
@@ -239,16 +370,29 @@ export default function SocialDashboard() {
             { value: "14", label: "Last 14 days" },
             { value: "30", label: "Last 30 days" },
             { value: "60", label: "Last 60 days" },
+            { value: "90", label: "Last 90 days" },
+            { value: "mtd", label: "This month" },
+            { value: "lastmonth", label: "Last month" },
           ]}
         />
-        <button
-          onClick={syncNow}
-          disabled={syncing || accounts.length === 0}
-          className="ml-auto flex items-center gap-2 rounded-lg bg-cyan-500/15 px-4 py-2 text-xs font-semibold text-cyan-300 hover:bg-cyan-500/25 disabled:opacity-50"
-          style={{ boxShadow: "inset 0 0 0 1px rgba(34,211,238,0.4)" }}
-        >
-          {syncing ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />} Sync now (30 days)
-        </button>
+        <div className="ml-auto flex items-center gap-2">
+          <button
+            onClick={() => syncNow(30)}
+            disabled={syncing || accounts.length === 0}
+            className="flex items-center gap-2 rounded-lg bg-white/[0.06] px-3 py-2 text-xs font-semibold text-slate-300 hover:bg-white/[0.1] disabled:opacity-50"
+          >
+            {syncing ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />} Sync 30 days
+          </button>
+          <button
+            onClick={() => syncNow(90)}
+            disabled={syncing || accounts.length === 0}
+            className="flex items-center gap-2 rounded-lg bg-cyan-500/15 px-3 py-2 text-xs font-semibold text-cyan-300 hover:bg-cyan-500/25 disabled:opacity-50"
+            style={{ boxShadow: "inset 0 0 0 1px rgba(34,211,238,0.4)" }}
+            title="Pulls everything Meta still returns (about 90 days) and stores it permanently"
+          >
+            {syncing ? <Loader2 size={13} className="animate-spin" /> : <History size={13} />} Backfill 90 days
+          </button>
+        </div>
       </div>
 
       {syncMsg && (
@@ -263,53 +407,135 @@ export default function SocialDashboard() {
       {accounts.length === 0 ? (
         <div className="glass-panel p-8 text-center">
           <Users size={28} className="mx-auto mb-3 text-slate-600" />
-          <div className="text-sm font-semibold text-slate-300">No Instagram accounts linked to clients yet</div>
+          <div className="text-sm font-semibold text-slate-300">No Instagram accounts or Facebook Pages linked to clients yet</div>
           <div className="mt-1 text-xs text-slate-500">
-            Open <Link href="/clients" className="text-cyan-300 hover:underline">Clients</Link> and click <strong className="text-slate-300">Add accounts</strong> on a client — each client can have as many Instagram accounts and Facebook Pages as it needs.
+            Open <Link href="/clients" className="text-cyan-300 hover:underline">Clients</Link> and click <strong className="text-slate-300">Add accounts</strong> on a client — each client can have as many as it needs.
           </div>
         </div>
       ) : !hasData ? (
         <div className="glass-panel p-8 text-center text-xs text-slate-500">
-          {accounts.length} account{accounts.length === 1 ? "" : "s"} linked, but no data stored yet. Click <strong className="text-slate-300">Sync now</strong> to pull the last 30 days.
+          {accounts.length} account{accounts.length === 1 ? "" : "s"} linked, but no data stored yet. Click <strong className="text-slate-300">Sync 30 days</strong> to start.
         </div>
       ) : (
         <>
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
             <Kpi label="Followers" icon={Users} color="text-blue-400" value={formatNumber(kpis.followers)} change={kpis.followerDelta != null ? `${kpis.followerDelta >= 0 ? "+" : ""}${formatNumber(kpis.followerDelta)}` : null} />
-            <Kpi label="Reach" icon={TrendingUp} color="text-emerald-400" value={compactNumber(kpis.reach.value)} change={kpis.reach.change} />
-            <Kpi label="Views" icon={Eye} color="text-violet-400" value={compactNumber(kpis.views.value)} change={kpis.views.change} />
-            <Kpi label="Profile visits" icon={UserCheck} color="text-amber-400" value={compactNumber(kpis.profileViews.value)} change={kpis.profileViews.change} />
-            <Kpi label="Accounts engaged" icon={MousePointerClick} color="text-rose-400" value={compactNumber(kpis.engaged.value)} change={kpis.engaged.change} />
+            <Kpi label="Reach" icon={TrendingUp} color="text-emerald-400" value={insightsAvailable ? compactNumber(kpis.reach.value) : dash} change={insightsAvailable ? kpis.reach.change : null} />
+            <Kpi label="Views" icon={Eye} color="text-violet-400" value={insightsAvailable ? compactNumber(kpis.views.value) : dash} change={insightsAvailable ? kpis.views.change : null} />
+            <Kpi label="Profile visits" icon={UserCheck} color="text-amber-400" value={insightsAvailable ? compactNumber(kpis.profileViews.value) : dash} change={insightsAvailable ? kpis.profileViews.change : null} />
+            <Kpi label="Accounts engaged" icon={MousePointerClick} color="text-rose-400" value={insightsAvailable ? compactNumber(kpis.engaged.value) : dash} change={insightsAvailable ? kpis.engaged.change : null} />
           </div>
-          <div className="-mt-2 text-[10px] text-slate-600">Changes compare against the previous {days} days. Reach is summed per day, so it counts a person once for each day they were reached. Facebook Pages contribute followers only for now — reach, views and engagement come from Instagram.</div>
+          <div className="-mt-2 text-[10px] text-slate-600">
+            Showing {win.label} ({win.from} to {win.to}); changes compare with the {spanDays(win.prevFrom, win.prevTo)} days before. Reach is summed per day, so a person reached on several days counts each day. Facebook Pages add followers only for now.
+            {!insightsAvailable && " “—” means no insights are stored for the selected accounts yet (see the account table below)."}
+          </div>
 
           <div className="glass-panel p-4 sm:p-5">
             <h3 className="mb-3 text-sm font-semibold text-slate-100">Reach &amp; views per day</h3>
-            <div className="h-[280px]">
-              {mounted && (
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={series} margin={{ top: 10, right: 8, left: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(120,160,255,0.08)" vertical={false} />
-                    <XAxis dataKey="label" tick={{ fill: "#7c8bb0", fontSize: 11 }} axisLine={{ stroke: "rgba(120,160,255,0.15)" }} tickLine={false} />
-                    <YAxis tick={{ fill: "#7c8bb0", fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => compactNumber(v as number)} width={44} />
-                    <Tooltip
-                      formatter={(value, name) => [formatNumber(Number(value) || 0), name === "reach" ? "Reach" : "Views"]}
-                      labelStyle={{ color: "#e5e9f0" }}
-                      itemStyle={{ color: "#e5e9f0" }}
-                      contentStyle={{ background: "#11151f", border: "1px solid rgba(255,255,255,0.12)" }}
-                    />
-                    <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ fontSize: 12, color: "#9fb0d0", paddingBottom: 8 }} formatter={(v) => (v === "reach" ? "Reach" : "Views")} />
-                    <Line type="monotone" dataKey="reach" stroke="#34d399" strokeWidth={2.5} dot={false} />
-                    <Line type="monotone" dataKey="views" stroke="#8b5cf6" strokeWidth={2.5} dot={false} />
-                  </LineChart>
-                </ResponsiveContainer>
+            <div className="h-[260px]">
+              {!insightsAvailable ? (
+                <div className="grid h-full place-items-center text-xs text-slate-500">No daily insights stored for the selected accounts yet.</div>
+              ) : (
+                mounted && (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={series} margin={{ top: 10, right: 8, left: 0, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(120,160,255,0.08)" vertical={false} />
+                      <XAxis dataKey="label" tick={{ fill: "#7c8bb0", fontSize: 11 }} axisLine={{ stroke: "rgba(120,160,255,0.15)" }} tickLine={false} />
+                      <YAxis tick={{ fill: "#7c8bb0", fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => compactNumber(v as number)} width={44} />
+                      <Tooltip
+                        formatter={(value, name) => [formatNumber(Number(value) || 0), name === "reach" ? "Reach" : "Views"]}
+                        labelStyle={{ color: "#e5e9f0" }}
+                        itemStyle={{ color: "#e5e9f0" }}
+                        contentStyle={{ background: "#11151f", border: "1px solid rgba(255,255,255,0.12)" }}
+                      />
+                      <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ fontSize: 12, color: "#9fb0d0", paddingBottom: 8 }} formatter={(v) => (v === "reach" ? "Reach" : "Views")} />
+                      <Line type="monotone" dataKey="reach" stroke="#34d399" strokeWidth={2.5} dot={false} />
+                      <Line type="monotone" dataKey="views" stroke="#8b5cf6" strokeWidth={2.5} dot={false} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                )
               )}
             </div>
           </div>
 
+          {/* Month by month — every day ever stored, not limited to Meta's ~90 days */}
+          <div className="glass-panel p-4 sm:p-5">
+            <div className="mb-1 flex flex-wrap items-baseline gap-2">
+              <h3 className="text-sm font-semibold text-slate-100">Month by month</h3>
+              <span className="text-[10px] text-slate-500">Built from every day saved in our database, so it keeps growing past the 90 days Meta returns. Follows the client, platform and account filters above.</span>
+            </div>
+
+            {monthly.length > 0 && insightsAvailable && (
+              <div className="mb-4 h-[220px]">
+                {mounted && (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={monthly.slice(-12)} margin={{ top: 10, right: 8, left: 0, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(120,160,255,0.08)" vertical={false} />
+                      <XAxis dataKey="label" tick={{ fill: "#7c8bb0", fontSize: 11 }} axisLine={{ stroke: "rgba(120,160,255,0.15)" }} tickLine={false} />
+                      <YAxis tick={{ fill: "#7c8bb0", fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => compactNumber(v as number)} width={44} />
+                      <Tooltip
+                        formatter={(value, name) => [formatNumber(Number(value) || 0), name === "reach" ? "Reach" : "Views"]}
+                        labelStyle={{ color: "#e5e9f0" }}
+                        itemStyle={{ color: "#e5e9f0" }}
+                        contentStyle={{ background: "#11151f", border: "1px solid rgba(255,255,255,0.12)" }}
+                      />
+                      <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ fontSize: 12, color: "#9fb0d0", paddingBottom: 8 }} formatter={(v) => (v === "reach" ? "Reach" : "Views")} />
+                      <Bar dataKey="reach" fill="#34d399" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="views" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+            )}
+
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[820px] border-collapse text-xs">
+                <thead>
+                  <tr className="text-left text-[10px] uppercase tracking-wider text-slate-500">
+                    <th className="px-3 py-2.5 font-semibold">Month</th>
+                    <th className="px-3 py-2.5 text-right font-semibold">Followers (end)</th>
+                    <th className="px-3 py-2.5 text-right font-semibold">Growth</th>
+                    <th className="px-3 py-2.5 text-right font-semibold">Reach</th>
+                    <th className="px-3 py-2.5 text-right font-semibold">vs prev.</th>
+                    <th className="px-3 py-2.5 text-right font-semibold">Views</th>
+                    <th className="px-3 py-2.5 text-right font-semibold">Profile visits</th>
+                    <th className="px-3 py-2.5 text-right font-semibold">Engaged</th>
+                    <th className="px-3 py-2.5 text-right font-semibold">Interactions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {monthly.length === 0 ? (
+                    <tr>
+                      <td colSpan={9} className="px-3 py-6 text-center text-slate-500">No stored data for the selected accounts yet.</td>
+                    </tr>
+                  ) : (
+                    [...monthly].reverse().map((m) => (
+                      <tr key={m.month} className="border-t border-white/[0.05] hover:bg-white/[0.02]">
+                        <td className="px-3 py-2.5 font-semibold text-slate-100">
+                          {m.label}
+                          {m.partial && <span className="ml-1.5 text-[10px] font-normal text-slate-500">so far</span>}
+                        </td>
+                        <td className="px-3 py-2.5 text-right text-slate-200">{m.followersEnd != null ? formatNumber(m.followersEnd) : dash}</td>
+                        <td className={`px-3 py-2.5 text-right ${m.followerGrowth == null ? "text-slate-600" : m.followerGrowth >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                          {m.followerGrowth == null ? dash : `${m.followerGrowth >= 0 ? "+" : ""}${formatNumber(m.followerGrowth)}`}
+                        </td>
+                        <td className="px-3 py-2.5 text-right text-slate-300">{m.insights ? formatNumber(m.reach) : dash}</td>
+                        <td className={`px-3 py-2.5 text-right ${m.reachChange == null ? "text-slate-600" : m.reachChange.startsWith("-") ? "text-rose-400" : "text-emerald-400"}`}>{m.reachChange ?? dash}</td>
+                        <td className="px-3 py-2.5 text-right text-slate-300">{m.insights ? formatNumber(m.views) : dash}</td>
+                        <td className="px-3 py-2.5 text-right text-slate-300">{m.insights ? formatNumber(m.profile) : dash}</td>
+                        <td className="px-3 py-2.5 text-right text-slate-300">{m.insights ? formatNumber(m.engaged) : dash}</td>
+                        <td className="px-3 py-2.5 text-right text-slate-300">{m.insights ? formatNumber(m.interactions) : dash}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
           <div className="glass-panel overflow-x-auto p-4 sm:p-5">
-            <h3 className="mb-3 text-sm font-semibold text-slate-100">By account</h3>
-            <table className="w-full min-w-[720px] border-collapse text-xs">
+            <h3 className="mb-3 text-sm font-semibold text-slate-100">By account ({win.label})</h3>
+            <table className="w-full min-w-[820px] border-collapse text-xs">
               <thead>
                 <tr className="text-left text-[10px] uppercase tracking-wider text-slate-500">
                   <th className="px-3 py-2.5 font-semibold">Account</th>
@@ -325,6 +551,7 @@ export default function SocialDashboard() {
               <tbody>
                 {selected.map((a) => {
                   const one = [a];
+                  const ins = hasInsights(a);
                   const lastFollowers = [...a.snapshots].reverse().find((s) => s.followers_count != null)?.followers_count;
                   return (
                     <tr key={a.accountId} className="border-t border-white/[0.05] hover:bg-white/[0.02]">
@@ -333,14 +560,17 @@ export default function SocialDashboard() {
                           {a.platform === "instagram" ? <Camera size={12} className="text-pink-400" /> : <ThumbsUp size={12} className="text-blue-400" />}
                           {a.handle || a.externalId}
                         </span>
+                        {!ins && (
+                          <div className="mt-0.5 text-[10px] text-amber-400/80">
+                            {a.platform === "instagram" ? "Insights blocked — token needs instagram_manage_insights" : "Followers only — Facebook reach isn't connected"}
+                          </div>
+                        )}
                       </td>
                       <td className="px-3 py-2.5 text-slate-400">{a.clientName}</td>
-                      <td className="px-3 py-2.5 text-right text-slate-200">{lastFollowers != null ? formatNumber(lastFollowers) : "—"}</td>
-                      <td className="px-3 py-2.5 text-right text-slate-300">{formatNumber(sum(one, win.from, win.to, "reach"))}</td>
-                      <td className="px-3 py-2.5 text-right text-slate-300">{formatNumber(sum(one, win.from, win.to, "views"))}</td>
-                      <td className="px-3 py-2.5 text-right text-slate-300">{formatNumber(sum(one, win.from, win.to, "profile_views"))}</td>
-                      <td className="px-3 py-2.5 text-right text-slate-300">{formatNumber(sum(one, win.from, win.to, "accounts_engaged"))}</td>
-                      <td className="px-3 py-2.5 text-right text-slate-300">{formatNumber(sum(one, win.from, win.to, "total_interactions"))}</td>
+                      <td className="px-3 py-2.5 text-right text-slate-200">{lastFollowers != null ? formatNumber(lastFollowers) : dash}</td>
+                      {(["reach", "views", "profile_views", "accounts_engaged", "total_interactions"] as MetricKey[]).map((k) => (
+                        <td key={k} className="px-3 py-2.5 text-right text-slate-300">{ins ? formatNumber(sum(one, win.from, win.to, k)) : dash}</td>
+                      ))}
                     </tr>
                   );
                 })}
@@ -349,7 +579,7 @@ export default function SocialDashboard() {
           </div>
 
           <div className="glass-panel overflow-x-auto p-4 sm:p-5">
-            <h3 className="mb-3 text-sm font-semibold text-slate-100">Top posts</h3>
+            <h3 className="mb-3 text-sm font-semibold text-slate-100">Top posts ({win.label})</h3>
             <table className="w-full min-w-[720px] border-collapse text-xs">
               <thead>
                 <tr className="text-left text-[10px] uppercase tracking-wider text-slate-500">
@@ -364,7 +594,7 @@ export default function SocialDashboard() {
               <tbody>
                 {topPosts.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-3 py-6 text-center text-slate-500">No posts in this range.</td>
+                    <td colSpan={6} className="px-3 py-6 text-center text-slate-500">No posts stored for this range. Posts need the Instagram permission described above.</td>
                   </tr>
                 ) : (
                   topPosts.map((p) => (
@@ -380,10 +610,10 @@ export default function SocialDashboard() {
                           <span className="text-slate-100">{(p.caption ?? "(no caption)").slice(0, 80)}</span>
                         )}
                       </td>
-                      <td className="px-3 py-2.5 text-slate-400">{p.media_type?.replace("_", " ").toLowerCase() ?? "—"}</td>
-                      <td className="px-3 py-2.5 text-slate-400">{p.posted_at?.slice(0, 10) ?? "—"}</td>
-                      <td className="px-3 py-2.5 text-right text-slate-300">{p.like_count != null ? formatNumber(p.like_count) : "—"}</td>
-                      <td className="px-3 py-2.5 text-right text-slate-300">{p.comments_count != null ? formatNumber(p.comments_count) : "—"}</td>
+                      <td className="px-3 py-2.5 text-slate-400">{p.media_type?.replace("_", " ").toLowerCase() ?? dash}</td>
+                      <td className="px-3 py-2.5 text-slate-400">{p.posted_at?.slice(0, 10) ?? dash}</td>
+                      <td className="px-3 py-2.5 text-right text-slate-300">{p.like_count != null ? formatNumber(p.like_count) : dash}</td>
+                      <td className="px-3 py-2.5 text-right text-slate-300">{p.comments_count != null ? formatNumber(p.comments_count) : dash}</td>
                     </tr>
                   ))
                 )}
