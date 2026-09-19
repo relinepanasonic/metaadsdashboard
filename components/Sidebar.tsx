@@ -50,10 +50,10 @@ function navFor(role: Me["role"]): { main: NavItem[]; bottom: NavItem[] } {
   const main: NavItem[] = [
     { label: "Overview", href: "/", icon: LayoutDashboard },
     // Core ad channels
-    { label: "Social Media", href: "/social-media", icon: Camera, badge: "New" },
-    { label: "Meta Ads", href: "/meta-ads", icon: Share2, badge: "Live" },
-    { label: "Google Ads", href: "/google-ads", icon: Globe, badge: "Soon" },
-    { label: "SEO #1", href: "/seo", icon: Search, badge: "New", separatorAfter: true },
+    { label: "Social Media", href: "/social-media", icon: Camera },
+    { label: "Meta Ads", href: "/meta-ads", icon: Share2 },
+    { label: "Google Ads", href: "/google-ads", icon: Globe },
+    { label: "SEO #1", href: "/seo", icon: Search, separatorAfter: true },
   ];
   const bottom: NavItem[] = [
     { label: "Users", href: "/users", icon: UserCog },
