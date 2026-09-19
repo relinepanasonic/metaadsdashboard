@@ -12,7 +12,7 @@ export async function GET() {
 
   const { data, error } = await db
     .from("clients")
-    .select("id,name,owner,pic,contact_email,website_domain,instagram_handle,meta_ad_account_id,google_ads_account_id,created_at")
+    .select("id,name,owner,pic,contact_email,website_domain,instagram_handle,instagram_user_id,meta_ad_account_id,google_ads_account_id,created_at")
     .order("name", { ascending: true });
 
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
@@ -31,6 +31,7 @@ export async function POST(req: NextRequest) {
     owner?: string;
     websiteDomain?: string;
     instagramHandle?: string;
+    instagramUserId?: string;
     metaAdAccountId?: string;
     googleAdsAccountId?: string;
   };
@@ -43,6 +44,7 @@ export async function POST(req: NextRequest) {
       owner: body.owner?.trim() || null,
       website_domain: body.websiteDomain?.trim() || null,
       instagram_handle: body.instagramHandle?.trim() || null,
+      instagram_user_id: body.instagramUserId?.trim() || null,
       meta_ad_account_id: body.metaAdAccountId?.trim() || null,
       google_ads_account_id: body.googleAdsAccountId?.trim() || null,
     })

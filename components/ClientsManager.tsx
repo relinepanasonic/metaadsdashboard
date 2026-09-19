@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import CustomSelect from "@/components/CustomSelect";
 import { Plus, Pencil, Trash2, Check, X, Loader2, Search, Globe2, Share2, Camera } from "lucide-react";
 
 interface Client {
@@ -11,6 +12,7 @@ interface Client {
   contact_email: string | null;
   website_domain: string | null;
   instagram_handle: string | null;
+  instagram_user_id: string | null;
   meta_ad_account_id: string | null;
   google_ads_account_id: string | null;
   created_at: string;
@@ -21,11 +23,12 @@ type FormFields = {
   owner: string;
   websiteDomain: string;
   instagramHandle: string;
+  instagramUserId: string;
   metaAdAccountId: string;
   googleAdsAccountId: string;
 };
 
-const EMPTY_FORM: FormFields = { name: "", owner: "", websiteDomain: "", instagramHandle: "", metaAdAccountId: "", googleAdsAccountId: "" };
+const EMPTY_FORM: FormFields = { name: "", owner: "", websiteDomain: "", instagramHandle: "", instagramUserId: "", metaAdAccountId: "", googleAdsAccountId: "" };
 
 function Cell({ value, placeholder }: { value: string | null; placeholder: string }) {
   return value ? <span className="text-slate-200">{value}</span> : <span className="text-slate-600">{placeholder}</span>;
@@ -81,6 +84,7 @@ export default function ClientsManager({ canDelete }: { canDelete: boolean }) {
       owner: c.owner ?? "",
       websiteDomain: c.website_domain ?? "",
       instagramHandle: c.instagram_handle ?? "",
+      instagramUserId: c.instagram_user_id ?? "",
       metaAdAccountId: c.meta_ad_account_id ?? "",
       googleAdsAccountId: c.google_ads_account_id ?? "",
     });
@@ -145,6 +149,10 @@ export default function ClientsManager({ canDelete }: { canDelete: boolean }) {
             <LabeledInput label="Website" value={addForm.websiteDomain} onChange={(v) => setAddForm((f) => ({ ...f, websiteDomain: v }))} placeholder="example.com" />
             <LabeledInput label="Meta Ads account" value={addForm.metaAdAccountId} onChange={(v) => setAddForm((f) => ({ ...f, metaAdAccountId: v }))} placeholder="Ad account id" />
             <LabeledInput label="Instagram" value={addForm.instagramHandle} onChange={(v) => setAddForm((f) => ({ ...f, instagramHandle: v }))} placeholder="@handle" />
+            <div>
+              <LabeledInput label="Instagram account ID" value={addForm.instagramUserId} onChange={(v) => setAddForm((f) => ({ ...f, instagramUserId: v }))} placeholder="e.g. 17841435173358588" />
+              <IgFinder onPick={(handle, id) => setAddForm((f) => ({ ...f, instagramHandle: "@" + handle, instagramUserId: id }))} />
+            </div>
             <LabeledInput label="Google Ads account" value={addForm.googleAdsAccountId} onChange={(v) => setAddForm((f) => ({ ...f, googleAdsAccountId: v }))} placeholder="Customer id" />
           </div>
           <div className="mt-3 flex items-center gap-2">
@@ -198,7 +206,13 @@ export default function ClientsManager({ canDelete }: { canDelete: boolean }) {
                       <td className="px-3 py-2"><RowInput value={editForm.name} onChange={(v) => setEditForm((f) => ({ ...f, name: v }))} /></td>
                       <td className="px-3 py-2"><RowInput value={editForm.websiteDomain} onChange={(v) => setEditForm((f) => ({ ...f, websiteDomain: v }))} placeholder="example.com" /></td>
                       <td className="px-3 py-2"><RowInput value={editForm.metaAdAccountId} onChange={(v) => setEditForm((f) => ({ ...f, metaAdAccountId: v }))} /></td>
-                      <td className="px-3 py-2"><RowInput value={editForm.instagramHandle} onChange={(v) => setEditForm((f) => ({ ...f, instagramHandle: v }))} /></td>
+                      <td className="px-3 py-2">
+                        <div className="flex flex-col gap-1">
+                          <RowInput value={editForm.instagramHandle} onChange={(v) => setEditForm((f) => ({ ...f, instagramHandle: v }))} placeholder="@handle" />
+                          <RowInput value={editForm.instagramUserId} onChange={(v) => setEditForm((f) => ({ ...f, instagramUserId: v }))} placeholder="account ID" />
+                          <IgFinder onPick={(handle, id) => setEditForm((f) => ({ ...f, instagramHandle: "@" + handle, instagramUserId: id }))} />
+                        </div>
+                      </td>
                       <td className="px-3 py-2"><RowInput value={editForm.googleAdsAccountId} onChange={(v) => setEditForm((f) => ({ ...f, googleAdsAccountId: v }))} /></td>
                       <td className="px-3 py-2 text-right">
                         <div className="flex items-center justify-end gap-1">
@@ -236,7 +250,7 @@ export default function ClientsManager({ canDelete }: { canDelete: boolean }) {
                     </td>
                     <td className="px-3 py-2.5">
                       {c.instagram_handle ? (
-                        <span className="inline-flex items-center gap-1 text-slate-300"><Camera size={11} className="text-pink-400" /> {c.instagram_handle}</span>
+                        <span className="inline-flex items-center gap-1 text-slate-300"><Camera size={11} className="text-pink-400" /> {c.instagram_handle}{c.instagram_user_id && <span className="ml-1 h-1.5 w-1.5 rounded-full bg-emerald-400" title="Instagram account ID set — data can sync" />}</span>
                       ) : (
                         <span className="text-slate-600">—</span>
                       )}
@@ -287,5 +301,51 @@ function RowInput({ value, onChange, placeholder }: { value: string; onChange: (
       placeholder={placeholder}
       className="w-full rounded-md border border-white/[0.12] bg-[#0b0e14] px-2 py-1.5 text-xs text-slate-100 placeholder:text-slate-600 focus:border-cyan-500/50 focus:outline-none"
     />
+  );
+}
+
+// Lists Instagram accounts the Meta token can reach so the numeric ID never
+// has to be copied by hand. Errors (e.g. token lacks instagram permissions)
+// are shown inline so the reason is visible.
+function IgFinder({ onPick }: { onPick: (handle: string, id: string) => void }) {
+  const [accounts, setAccounts] = useState<{ id: string; username: string; pageName: string }[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState("");
+
+  async function load() {
+    setLoading(true);
+    setErr("");
+    const res = await fetch("/api/instagram/discover", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ ok: false, error: "Request failed" }));
+    setLoading(false);
+    if (res.ok) setAccounts(res.accounts);
+    else setErr(res.error);
+  }
+
+  if (!accounts) {
+    return (
+      <div className="mt-1">
+        <button type="button" onClick={load} disabled={loading} className="text-[10px] font-semibold text-cyan-300 hover:underline disabled:opacity-50">
+          {loading ? "Searching…" : "Find accounts"}
+        </button>
+        {err && <div className="mt-1 max-w-[260px] text-[10px] text-rose-300">{err}</div>}
+      </div>
+    );
+  }
+
+  if (accounts.length === 0) return <div className="mt-1 text-[10px] text-amber-300">No Instagram accounts reachable by the token yet.</div>;
+
+  return (
+    <div className="mt-1">
+      <CustomSelect
+        size="sm"
+        value=""
+        placeholder="Pick an account…"
+        onChange={(id) => {
+          const a = accounts.find((x) => x.id === id);
+          if (a) onPick(a.username, a.id);
+        }}
+        options={accounts.map((a) => ({ value: a.id, label: "@" + a.username + " (" + a.pageName + ")" }))}
+      />
+    </div>
   );
 }

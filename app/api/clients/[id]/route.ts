@@ -16,6 +16,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     owner?: string;
     websiteDomain?: string;
     instagramHandle?: string;
+    instagramUserId?: string;
     metaAdAccountId?: string;
     googleAdsAccountId?: string;
   };
@@ -25,6 +26,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (body.owner !== undefined) fields.owner = body.owner.trim() || null;
   if (body.websiteDomain !== undefined) fields.website_domain = body.websiteDomain.trim() || null;
   if (body.instagramHandle !== undefined) fields.instagram_handle = body.instagramHandle.trim() || null;
+  if (body.instagramUserId !== undefined) fields.instagram_user_id = body.instagramUserId.trim() || null;
   if (body.metaAdAccountId !== undefined) fields.meta_ad_account_id = body.metaAdAccountId.trim() || null;
   if (body.googleAdsAccountId !== undefined) fields.google_ads_account_id = body.googleAdsAccountId.trim() || null;
   if (Object.keys(fields).length === 0) return NextResponse.json({ ok: false, error: "Nothing to update" }, { status: 400 });
