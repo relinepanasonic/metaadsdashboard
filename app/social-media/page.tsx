@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Filter, Camera, ThumbsUp, Users, Heart, MessageCircle, TrendingUp } from "lucide-react";
+import CustomSelect from "@/components/CustomSelect";
 
 export default function SocialMediaDashboard() {
   const [month, setMonth] = useState("Sep 2026");
@@ -20,41 +21,44 @@ export default function SocialMediaDashboard() {
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2 rounded-lg border border-white/[0.08] bg-[#1a1f2e] px-3 py-1.5 text-sm text-slate-200">
-            <Filter size={14} className="text-cyan-400" />
-            <select 
-              className="bg-transparent outline-none text-slate-200 cursor-pointer"
+          <div className="flex items-center gap-1.5">
+            <Filter size={14} className="text-cyan-400 shrink-0" />
+            <CustomSelect
+              className="min-w-[160px]"
               value={month}
-              onChange={(e) => setMonth(e.target.value)}
-            >
-              <option value="Sep 2026">September 2026</option>
-              <option value="Aug 2026">August 2026</option>
-              <option value="Jul 2026">July 2026</option>
-            </select>
+              onChange={setMonth}
+              options={[
+                { value: "Sep 2026", label: "September 2026" },
+                { value: "Aug 2026", label: "August 2026" },
+                { value: "Jul 2026", label: "July 2026" },
+              ]}
+            />
           </div>
 
-          <div className="flex items-center gap-2 rounded-lg border border-white/[0.08] bg-[#1a1f2e] px-3 py-1.5 text-sm text-slate-200">
-            <select 
-              className="bg-transparent outline-none text-slate-200 cursor-pointer"
+          <div className="flex items-center gap-1.5">
+            <CustomSelect
+              className="min-w-[150px]"
               value={platform}
-              onChange={(e) => setPlatform(e.target.value)}
-            >
-              <option value="All">All Platforms</option>
-              <option value="Instagram">Instagram</option>
-              <option value="Facebook">Facebook</option>
-            </select>
+              onChange={setPlatform}
+              options={[
+                { value: "All", label: "All Platforms" },
+                { value: "Instagram", label: "Instagram" },
+                { value: "Facebook", label: "Facebook" },
+              ]}
+            />
           </div>
 
-          <div className="flex items-center gap-2 rounded-lg border border-white/[0.08] bg-[#1a1f2e] px-3 py-1.5 text-sm text-slate-200">
-            <select 
-              className="bg-transparent outline-none text-slate-200 cursor-pointer"
+          <div className="flex items-center gap-1.5">
+            <CustomSelect
+              className="min-w-[170px]"
               value={account}
-              onChange={(e) => setAccount(e.target.value)}
-            >
-              <option value="All Accounts">All Accounts</option>
-              <option value="Prof Toko Online">Prof Toko Online</option>
-              <option value="Client A">Client A</option>
-            </select>
+              onChange={setAccount}
+              options={[
+                { value: "All Accounts", label: "All Accounts", accent: true },
+                { value: "Prof Toko Online", label: "Prof Toko Online" },
+                { value: "Client A", label: "Client A" },
+              ]}
+            />
           </div>
         </div>
       </div>
