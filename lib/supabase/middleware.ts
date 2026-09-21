@@ -47,6 +47,15 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  // Accounts created with a temporary password are held on the change-password
+  // page until they pick their own.
+  if (user?.user_metadata?.must_change_password && pathname !== "/change-password") {
+    const url = request.nextUrl.clone();
+    url.pathname = "/change-password";
+    url.search = "";
+    return NextResponse.redirect(url);
+  }
+
   if (user && (pathname === "/login" || pathname === "/setup")) {
     const url = request.nextUrl.clone();
     url.pathname = "/";

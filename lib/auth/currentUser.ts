@@ -26,6 +26,8 @@ export async function getCurrentUser(): Promise<AppUser | null> {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return null;
+  // Temporary-password sessions get no access until the password is changed.
+  if (user.user_metadata?.must_change_password) return null;
 
   const { data: row } = await supabase
     .from("app_users")
