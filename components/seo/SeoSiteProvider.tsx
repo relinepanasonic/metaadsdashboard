@@ -34,6 +34,8 @@ interface SeoSiteCtx {
   selectedSite: SeoSite | null;
   loading: boolean;
   reload: () => void;
+  isClient: boolean; // a Client user: one brand, read-only
+  clientName: string;
 }
 
 const Ctx = createContext<SeoSiteCtx>({
@@ -47,6 +49,8 @@ const Ctx = createContext<SeoSiteCtx>({
   selectedSite: null,
   loading: true,
   reload: () => {},
+  isClient: false,
+  clientName: "",
 });
 
 export function useSeoSite() {
@@ -57,7 +61,10 @@ const LAST_SITE_KEY = "seo:lastSiteId";
 const LAST_BRAND_KEY = "seo:lastBrandId";
 const UNASSIGNED_ID = "";
 
-export default function SeoSiteProvider({ children }: { children: ReactNode }) {
+export default function SeoSiteProvider({ children, isClient = false, clientName = "" }: { children: ReactNode; isClient?: boolean; clientName?: string }) {
+  // The list is already limited to the client's own sites by the API, so for a
+  // client there is no brand filtering to do at all.
+  const inBrand = (s: SeoSite, brandId: string) => isClient || (s.client_id ?? UNASSIGNED_ID) === brandId;
   const [sites, setSites] = useState<SeoSite[]>([]);
   const [clients, setClients] = useState<{ id: string; name: string }[]>([]);
   const [selected, setSelectedState] = useState("");
@@ -68,7 +75,7 @@ export default function SeoSiteProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     Promise.all([
       fetch("/api/seo/gsc/sites", { cache: "no-store" }).then((r) => r.json()),
-      fetch("/api/clients", { cache: "no-store" }).then((r) => r.json()),
+      isClient ? Promise.resolve({ ok: false }) : fetch("/api/clients", { cache: "no-store" }).then((r) => r.json()),
     ])
       .then(([sitesJson, clientsJson]) => {
         const list: SeoSite[] = sitesJson.ok ? sitesJson.sites : [];
@@ -94,7 +101,7 @@ export default function SeoSiteProvider({ children }: { children: ReactNode }) {
         setSelectedBrandState(nextBrand);
 
         const rememberedSite = typeof window !== "undefined" ? window.localStorage.getItem(LAST_SITE_KEY) : null;
-        const sitesInBrand = list.filter((s) => (s.client_id ?? UNASSIGNED_ID) === nextBrand);
+        const sitesInBrand = list.filter((s) => inBrand(s, nextBrand));
         setSelectedState((prev) => {
           if (rememberedSite && sitesInBrand.some((s) => s.id === rememberedSite)) return rememberedSite;
           if (prev && sitesInBrand.some((s) => s.id === prev)) return prev;
@@ -116,8 +123,9 @@ export default function SeoSiteProvider({ children }: { children: ReactNode }) {
   }, [clients, sites]);
 
   const sitesForSelectedBrand = useMemo(
-    () => sites.filter((s) => (s.client_id ?? UNASSIGNED_ID) === selectedBrand),
-    [sites, selectedBrand]
+    () => sites.filter((s) => inBrand(s, selectedBrand)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [sites, selectedBrand, isClient]
   );
 
   function setSelectedBrand(id: string) {
@@ -127,7 +135,7 @@ export default function SeoSiteProvider({ children }: { children: ReactNode }) {
     } catch {
       // best-effort only
     }
-    const sitesInBrand = sites.filter((s) => (s.client_id ?? UNASSIGNED_ID) === id);
+    const sitesInBrand = sites.filter((s) => inBrand(s, id));
     setSelected(sitesInBrand[0]?.id ?? "");
   }
 
@@ -144,7 +152,7 @@ export default function SeoSiteProvider({ children }: { children: ReactNode }) {
 
   return (
     <Ctx.Provider
-      value={{ sites, brands, selectedBrand, setSelectedBrand, sitesForSelectedBrand, selected, setSelected, selectedSite, loading, reload: load }}
+      value={{ sites, brands, selectedBrand, setSelectedBrand, sitesForSelectedBrand, selected, setSelected, selectedSite, loading, reload: load, isClient, clientName }}
     >
       {children}
     </Ctx.Provider>

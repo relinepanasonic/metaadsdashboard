@@ -11,12 +11,15 @@ const TABS = [
   { href: "/meta-ads/leads", label: "Leads", icon: Users },
 ];
 
-export default function MetaAdsTabs() {
+export default function MetaAdsTabs({ clientView = false }: { clientView?: boolean }) {
   const pathname = usePathname();
+  // Campaigns is a placeholder; Audience holds uploaded customer lists that are not
+  // tied to any one client, so a client must never see them.
+  const tabs = clientView ? TABS.filter((t) => t.href === "/meta-ads") : TABS;
 
   return (
     <div className="mb-6 flex flex-wrap items-center gap-1.5 rounded-xl border border-white/[0.06] bg-[#0b0e14]/60 p-1.5">
-      {TABS.map((t) => {
+      {tabs.map((t) => {
         const active = pathname === t.href;
         const Icon = t.icon;
         return (

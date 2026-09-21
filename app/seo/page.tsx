@@ -34,7 +34,7 @@ function monthLabel(ym: string): string {
 }
 
 export default function SeoDashboardPage() {
-  const { sites, selectedSite, loading: loadingSites } = useSeoSite();
+  const { sites, selectedSite, loading: loadingSites, isClient } = useSeoSite();
   const gscSites = useMemo(() => sites.filter((s) => s.status === "connected"), [sites]);
   const [selected, setSelected] = useState<string>("");
   const [data, setData] = useState<AnalyticsResponse | null>(null);
@@ -107,6 +107,16 @@ export default function SeoDashboardPage() {
       avgPosition: avgPos,
     };
   }, [filteredDaily]);
+
+  // Without live Search Console data this page falls back to demo numbers. Staff
+  // know that; a client must never be shown demo figures as their own.
+  if (isClient && !isLive) {
+    return (
+      <div className="glass-panel p-8 text-center text-xs text-slate-500">
+        {loadingSites ? "Loading…" : "No Search Console data is connected to your website yet. Your account manager can set it up."}
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-4">

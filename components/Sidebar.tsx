@@ -42,7 +42,13 @@ const ROLE_LABEL: Record<string, string> = {
 function navFor(role: Me["role"]): { main: NavItem[]; bottom: NavItem[] } {
   if (role === "client") {
     return {
-      main: [{ label: "My Campaigns", href: "/", icon: LayoutDashboard }],
+      main: [
+        { label: "Overview", href: "/", icon: LayoutDashboard },
+        { label: "Social Media", href: "/social-media", icon: Camera },
+        { label: "Meta Ads", href: "/meta-ads", icon: Share2 },
+        { label: "Google Ads", href: "/google-ads", icon: Globe },
+        { label: "SEO #1", href: "/seo", icon: Search },
+      ],
       bottom: [{ label: "Settings", href: "/settings", icon: Settings }],
     };
   }

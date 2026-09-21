@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/supabase/db";
 import { getCurrentUser } from "@/lib/auth/currentUser";
+import { getClientScope } from "@/lib/auth/scope";
 import { loadAccounts } from "@/lib/services/socialSync";
 
 // PostgREST caps every response at 1000 rows, and years of daily snapshots
@@ -57,11 +58,13 @@ interface PostOut {
 // in one shared shape so the page doesn't care which platform they came from.
 export async function GET() {
   const me = await getCurrentUser();
-  if (!me || me.role === "client") return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
+  if (!me) return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
   if (!db) return NextResponse.json({ ok: true, accounts: [] });
 
   try {
-    const rows = await loadAccounts();
+    const scope = me.role === "client" ? await getClientScope(me) : null;
+    // A client only ever sees their own brand's accounts; an unknown brand sees none.
+    const rows = (await loadAccounts()).filter((r) => !scope || scope.socialAccountIds.includes(r.account.id));
     const igIds = rows.filter((r) => r.account.platform === "instagram").map((r) => r.account.external_id);
     const fbIds = rows.filter((r) => r.account.platform === "facebook").map((r) => r.account.external_id);
     // Two years of history: the page shows month-to-month trends far beyond the

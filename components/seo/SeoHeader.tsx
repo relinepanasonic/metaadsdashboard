@@ -6,7 +6,7 @@ import { useSeoSite } from "./SeoSiteProvider";
 import CustomSelect from "@/components/CustomSelect";
 
 export default function SeoHeader() {
-  const { brands, selectedBrand, setSelectedBrand, sitesForSelectedBrand, selected, setSelected, loading } = useSeoSite();
+  const { brands, selectedBrand, setSelectedBrand, sitesForSelectedBrand, selected, setSelected, loading, isClient, clientName } = useSeoSite();
 
   return (
     <div className="mb-6 flex flex-wrap items-center gap-3">
@@ -23,7 +23,26 @@ export default function SeoHeader() {
         <p className="text-xs text-slate-500">Organic search + Generative Engine Optimization, wired to your paid Meta data</p>
       </div>
 
-      {!loading && (
+      {!loading && isClient && (
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          <Building2 size={14} className="shrink-0 text-slate-500" />
+          <span className="rounded-lg bg-white/[0.05] px-3 py-2 text-xs font-semibold text-slate-200">{clientName || "Your brand"}</span>
+          {sitesForSelectedBrand.length > 1 && (
+            <>
+              <span className="text-slate-700">/</span>
+              <Globe2 size={14} className="shrink-0 text-slate-500" />
+              <CustomSelect
+                className="min-w-[200px]"
+                value={selected}
+                onChange={setSelected}
+                options={sitesForSelectedBrand.map((s) => ({ value: s.id, label: s.label }))}
+              />
+            </>
+          )}
+        </div>
+      )}
+
+      {!loading && !isClient && (
         <div className="ml-auto flex flex-wrap items-center gap-2">
           {brands.length > 0 && (
             <>

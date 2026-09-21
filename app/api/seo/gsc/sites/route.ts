@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/supabase/db";
 import { getCurrentUser } from "@/lib/auth/currentUser";
+import { getClientScope } from "@/lib/auth/scope";
 import { verifySiteAccess, explainSiteAccessError, SEARCH_CONSOLE_CONFIGURED } from "@/lib/services/searchConsole";
 
 function bareDomain(input: string): string {
@@ -17,16 +18,26 @@ function bareDomain(input: string): string {
 // Content Engine all work from just a domain.
 export async function GET() {
   const me = await getCurrentUser();
-  if (!me || me.role === "client") return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
+  if (!me) return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
   if (!db) return NextResponse.json({ ok: true, sites: [] });
 
-  const { data, error } = await db
+  const scope = me.role === "client" ? await getClientScope(me) : null;
+  if (scope && scope.siteIds.length === 0) return NextResponse.json({ ok: true, sites: [] });
+
+  let query = db
     .from("search_console_sites")
     .select("id,domain,site_url,label,status,last_error,last_synced_at,publish_url,publish_secret,client_id,publish_cadence_per_week,last_auto_published_at,parent_site_id,path_prefix,created_at")
     .order("created_at", { ascending: false });
+  if (scope) query = query.in("id", scope.siteIds);
 
+  const { data, error } = await query;
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
-  return NextResponse.json({ ok: true, sites: data ?? [] });
+
+  // A client never receives publishing credentials or connection internals.
+  const sites = scope
+    ? (data ?? []).map((s) => ({ ...s, publish_url: null, publish_secret: null, site_url: null, last_error: null }))
+    : (data ?? []);
+  return NextResponse.json({ ok: true, sites });
 }
 
 // Register a website. `siteUrl` (the GSC property format) is optional — a site

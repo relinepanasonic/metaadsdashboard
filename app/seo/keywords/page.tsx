@@ -28,7 +28,7 @@ const SOURCE_LABEL: Record<string, string> = {
 };
 
 export default function KeywordsPage() {
-  const { sites, selected, selectedSite, loading: loadingSites } = useSeoSite();
+  const { sites, selected, selectedSite, loading: loadingSites, isClient } = useSeoSite();
   const [keywords, setKeywords] = useState<SavedKeyword[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("");
@@ -193,7 +193,8 @@ export default function KeywordsPage() {
         </div>
       </div>
 
-      {/* Manual add */}
+      {/* Manual add — staff only */}
+      {!isClient && (
       <div className="glass-panel p-4">
         <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-100">
           <Plus size={16} className="text-emerald-400" /> Add keywords manually
@@ -232,13 +233,14 @@ export default function KeywordsPage() {
         </div>
         {addError && <div className="mt-2 text-xs text-rose-300">{addError}</div>}
       </div>
+      )}
 
       {keywords.length === 0 ? (
         <div className="glass-panel p-8 text-center">
           <Bookmark size={28} className="mx-auto mb-3 text-slate-600" />
           <div className="text-sm font-semibold text-slate-300">No saved keywords yet</div>
           <div className="mt-1 text-xs text-slate-500">
-            Add one above, or go to the <span className="text-cyan-300">Research</span> tab and bookmark keywords from keyword ideas or competitor analysis.
+            {isClient ? "Your team hasn't saved any keywords for this site yet." : <>Add one above, or go to the <span className="text-cyan-300">Research</span> tab and bookmark keywords from keyword ideas or competitor analysis.</>}
           </div>
         </div>
       ) : (
@@ -253,7 +255,7 @@ export default function KeywordsPage() {
                   <SortHeader label="Difficulty" sk="difficulty" />
                   <SortHeader label="CPC (USD)" sk="cpc_usd" />
                   <SortHeader label="Position" sk="position" />
-                  <th className="px-3 py-2.5 text-right font-semibold"></th>
+                  {!isClient && <th className="px-3 py-2.5 text-right font-semibold"></th>}
                 </tr>
               </thead>
               <tbody>
@@ -273,11 +275,13 @@ export default function KeywordsPage() {
                       <td className="px-3 py-2.5 text-right text-slate-300">{k.difficulty != null ? k.difficulty : "—"}</td>
                       <td className="px-3 py-2.5 text-right text-slate-300">{k.cpc_usd != null ? `$${k.cpc_usd.toFixed(2)}` : "—"}</td>
                       <td className="px-3 py-2.5 text-right text-slate-300">{k.position != null ? `#${k.position}` : "—"}</td>
+                      {!isClient && (
                       <td className="px-3 py-2.5 text-right">
                         <button onClick={() => remove(k.id)} className="rounded-md p-1 text-slate-500 hover:bg-rose-500/10 hover:text-rose-300" title="Remove">
                           <X size={12} />
                         </button>
                       </td>
+                      )}
                     </tr>
                   ))
                 )}

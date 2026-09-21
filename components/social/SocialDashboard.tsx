@@ -135,7 +135,7 @@ function hasInsights(a: Account): boolean {
 
 const accountLabel = (a: Account) => `${a.handle || a.externalId} · ${a.platform === "instagram" ? "IG" : "FB"}`;
 
-export default function SocialDashboard() {
+export default function SocialDashboard({ canManage = true }: { canManage?: boolean }) {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [status, setStatus] = useState<Status | null>(null);
   const [loading, setLoading] = useState(true);
@@ -156,14 +156,14 @@ export default function SocialDashboard() {
     setLoading(true);
     Promise.all([
       fetch("/api/social/stats", { cache: "no-store" }).then((r) => r.json()),
-      fetch("/api/instagram/status", { cache: "no-store" }).then((r) => r.json()),
+      canManage ? fetch("/api/instagram/status", { cache: "no-store" }).then((r) => r.json()) : Promise.resolve(null),
     ])
       .then(([stats, st]) => {
         if (stats.ok) setAccounts(stats.accounts);
         setStatus(st);
       })
       .finally(() => setLoading(false));
-  }, []);
+  }, [canManage]);
 
   useEffect(() => {
     load();
@@ -173,7 +173,7 @@ export default function SocialDashboard() {
   // newer than the day before yesterday is stored — a missed run, or the first
   // visit after linking accounts — refresh quietly once when the page opens.
   useEffect(() => {
-    if (loading || autoSyncedRef.current || accounts.length === 0) return;
+    if (!canManage || loading || autoSyncedRef.current || accounts.length === 0) return;
     autoSyncedRef.current = true;
     const newest = accounts.flatMap((a) => a.snapshots.map((s) => s.snapshot_date)).sort().pop();
     if (newest && newest >= isoDaysAgo(1)) return;
@@ -185,7 +185,7 @@ export default function SocialDashboard() {
         setAutoSyncing(false);
         load();
       });
-  }, [loading, accounts, load]);
+  }, [canManage, loading, accounts, load]);
 
   async function syncNow(days: number) {
     setSyncing(true);
@@ -377,7 +377,7 @@ export default function SocialDashboard() {
   }, [selected, audience]);
 
   const hasData = accounts.some((a) => a.snapshots.length > 0);
-  const setupNeeded = status && (!status.ok || !status.configured || !status.ready);
+  const setupNeeded = canManage && status && (!status.ok || !status.configured || !status.ready);
   const dash = "—";
 
   if (loading) return <div className="glass-panel p-6 text-center text-xs text-slate-500">Loading social data&hellip;</div>;
@@ -403,6 +403,7 @@ export default function SocialDashboard() {
       {/* Filters: Client | Platform | Account | Duration */}
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <Filter size={14} className="shrink-0 text-slate-500" />
+        {canManage && (
         <CustomSelect
           className="min-w-[160px]"
           value={clientFilter}
@@ -412,6 +413,7 @@ export default function SocialDashboard() {
           }}
           options={[{ value: "all", label: "All clients", accent: true }, ...clientOptions]}
         />
+        )}
         <CustomSelect
           className="min-w-[140px]"
           value={platformFilter}
@@ -449,7 +451,7 @@ export default function SocialDashboard() {
         ) : (
           <>No data saved yet.</>
         )}
-        <span>It updates by itself every day at 09:30 WIB and is kept permanently in our database, so the month-by-month history keeps growing — no need to press Sync.</span>
+        <span>{canManage ? "It updates by itself every day at 09:30 WIB and is kept permanently in our database, so the month-by-month history keeps growing — no need to press Sync." : "Updated automatically every day."}</span>
       </div>
 
       {syncMsg && (
@@ -464,9 +466,13 @@ export default function SocialDashboard() {
       {accounts.length === 0 ? (
         <div className="glass-panel p-8 text-center">
           <Users size={28} className="mx-auto mb-3 text-slate-600" />
-          <div className="text-sm font-semibold text-slate-300">No Instagram accounts or Facebook Pages linked to clients yet</div>
+          <div className="text-sm font-semibold text-slate-300">{canManage ? "No Instagram accounts or Facebook Pages linked to clients yet" : "No social accounts are connected to your brand yet"}</div>
           <div className="mt-1 text-xs text-slate-500">
-            Open <Link href="/clients" className="text-cyan-300 hover:underline">Clients</Link> and click <strong className="text-slate-300">Add accounts</strong> on a client — each client can have as many as it needs.
+            {canManage ? (
+              <>Open <Link href="/clients" className="text-cyan-300 hover:underline">Clients</Link> and click <strong className="text-slate-300">Add accounts</strong> on a client — each client can have as many as it needs.</>
+            ) : (
+              <>Ask your account manager to connect them.</>
+            )}
           </div>
         </div>
       ) : !hasData ? (

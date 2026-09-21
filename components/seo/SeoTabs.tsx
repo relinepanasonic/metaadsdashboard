@@ -3,6 +3,11 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LayoutDashboard, SearchCode, Factory, Sparkles, Wrench, Bookmark } from "lucide-react";
+import { useSeoSite } from "./SeoSiteProvider";
+
+// Tabs a client can open. Research runs paid keyword lookups; GEO and Technical
+// still show demo numbers, which a client should not be shown as their own.
+const CLIENT_TABS = new Set(["/seo", "/seo/keywords", "/seo/content"]);
 
 const TABS = [
   { href: "/seo", label: "Dashboard", icon: LayoutDashboard },
@@ -15,10 +20,12 @@ const TABS = [
 
 export default function SeoTabs() {
   const pathname = usePathname();
+  const { isClient } = useSeoSite();
+  const tabs = isClient ? TABS.filter((t) => CLIENT_TABS.has(t.href)) : TABS;
 
   return (
     <div className="mb-6 flex flex-wrap items-center gap-1.5 rounded-xl border border-white/[0.06] bg-[#0b0e14]/60 p-1.5">
-      {TABS.map((t) => {
+      {tabs.map((t) => {
         const active = pathname === t.href;
         const Icon = t.icon;
         return (

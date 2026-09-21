@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth/currentUser";
+import { getClientScope } from "@/lib/auth/scope";
 import { fetchTopQueries } from "@/lib/services/searchConsole";
 import { resolveGscTarget } from "@/lib/services/siteResolve";
 
@@ -13,10 +14,13 @@ function isoDaysAgo(days: number): string {
 // days (Research tab).
 export async function GET(req: NextRequest) {
   const me = await getCurrentUser();
-  if (!me || me.role === "client") return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
+  if (!me) return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
 
   const siteId = req.nextUrl.searchParams.get("siteId");
   if (!siteId) return NextResponse.json({ ok: false, error: "Missing ?siteId=" }, { status: 400 });
+  if (me.role === "client" && !(await getClientScope(me)).siteIds.includes(siteId)) {
+    return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
+  }
 
   const target = await resolveGscTarget(siteId);
   if (!target) return NextResponse.json({ ok: false, error: "Search Console isn't connected for this site." }, { status: 400 });

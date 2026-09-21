@@ -5,7 +5,7 @@ import { getCurrentUser } from "@/lib/auth/currentUser";
 
 export default async function GoogleAdsPage() {
   const me = await getCurrentUser();
-  if (me?.role === "client") redirect("/");
+  if (!me) redirect("/login");
 
   return (
     <PagePlaceholder

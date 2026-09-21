@@ -5,7 +5,7 @@ import MetaAdsTabs from "@/components/meta-ads/MetaAdsTabs";
 
 export default async function MetaAdsLayout({ children }: { children: React.ReactNode }) {
   const me = await getCurrentUser();
-  if (me?.role === "client") redirect("/");
+  if (!me) redirect("/login");
 
   return (
     <div className="relative z-10 mx-auto max-w-[1400px] px-4 py-6 sm:px-6 lg:px-8">
@@ -23,7 +23,7 @@ export default async function MetaAdsLayout({ children }: { children: React.Reac
         </div>
       </div>
 
-      <MetaAdsTabs />
+      <MetaAdsTabs clientView={me.role === "client"} />
       {children}
     </div>
   );

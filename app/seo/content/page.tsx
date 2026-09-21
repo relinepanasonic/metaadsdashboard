@@ -28,7 +28,7 @@ interface Item {
 }
 
 export default function ContentPage() {
-  const { sites, selected, selectedSite, loading: loadingSites } = useSeoSite();
+  const { sites, selected, selectedSite, loading: loadingSites, isClient } = useSeoSite();
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
   const [openId, setOpenId] = useState<string | null>(null);
@@ -181,10 +181,12 @@ export default function ContentPage() {
     return (
       <div className="glass-panel p-8 text-center">
         <Factory size={28} className="mx-auto mb-3 text-slate-600" />
-        <div className="text-sm font-semibold text-slate-300">No keywords to write about yet — {selectedSite?.label}</div>
+        <div className="text-sm font-semibold text-slate-300">{isClient ? `Nothing published yet — ${selectedSite?.label ?? ""}` : `No keywords to write about yet — ${selectedSite?.label ?? ""}`}</div>
         <div className="mt-1 text-xs text-slate-500">
-          Save keywords in <Link href="/seo/research" className="text-cyan-300 hover:underline">Research</Link>, or add them in{" "}
-          <Link href="/seo/keywords" className="text-cyan-300 hover:underline">Keywords</Link>. Each one becomes one blog post.
+          {isClient ? "Articles published for your website will appear here." : (
+            <>Save keywords in <Link href="/seo/research" className="text-cyan-300 hover:underline">Research</Link>, or add them in{" "}
+            <Link href="/seo/keywords" className="text-cyan-300 hover:underline">Keywords</Link>. Each one becomes one blog post.</>
+          )}
         </div>
       </div>
     );
@@ -199,6 +201,7 @@ export default function ContentPage() {
 
   return (
     <div className="flex flex-col gap-4">
+      {!isClient && (
       <div className="glass-panel flex flex-wrap items-center gap-3 p-3">
         <Bot size={14} className="shrink-0 text-slate-500" />
         <span className="text-xs text-slate-400">Draft with</span>
@@ -211,6 +214,7 @@ export default function ContentPage() {
         />
         <span className="text-[10px] text-slate-600">Applies to every &quot;Draft with Claude&quot; below</span>
       </div>
+      )}
 
       {error && (
         <div className="glass-panel p-4 text-xs text-rose-300" style={{ boxShadow: "inset 0 0 0 1px rgba(251,113,133,0.3)" }}>
