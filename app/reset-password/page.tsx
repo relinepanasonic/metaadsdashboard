@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { KeyRound, Loader2, CheckCircle2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import AuthCard from "@/components/auth/AuthCard";
+import PasswordInput from "@/components/auth/PasswordInput";
 
 const inputCls =
   "w-full rounded-lg border border-white/[0.12] bg-[#0b0e14] px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-600 focus:border-cyan-500/50 focus:outline-none";
@@ -67,11 +68,11 @@ export default function ResetPasswordPage() {
           )}
           <div>
             <label className="mb-1.5 block text-[11px] font-medium text-slate-400">New Password</label>
-            <input className={inputCls} type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" autoFocus required />
+            <PasswordInput className={inputCls} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" autoFocus required />
           </div>
           <div>
             <label className="mb-1.5 block text-[11px] font-medium text-slate-400">Confirm Password</label>
-            <input className={inputCls} type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} placeholder="••••••••" required />
+            <PasswordInput className={inputCls} value={confirm} onChange={(e) => setConfirm(e.target.value)} placeholder="••••••••" required />
           </div>
           <button
             type="submit"

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ShieldCheck, Loader2 } from "lucide-react";
 import AuthCard from "@/components/auth/AuthCard";
+import PasswordInput from "@/components/auth/PasswordInput";
 
 const inputCls =
   "w-full rounded-lg border border-white/[0.12] bg-[#0b0e14] px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-600 focus:border-cyan-500/50 focus:outline-none";
@@ -82,7 +83,7 @@ export default function SetupPage() {
         </div>
         <div>
           <label className="mb-1.5 block text-[11px] font-medium text-slate-400">Password</label>
-          <input className={inputCls} type="password" value={password} onChange={(e) => setPassword(e.target.value)} minLength={8} required />
+          <PasswordInput className={inputCls} value={password} onChange={(e) => setPassword(e.target.value)} minLength={8} required />
         </div>
         <button
           type="submit"

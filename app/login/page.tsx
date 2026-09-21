@@ -6,6 +6,7 @@ import Link from "next/link";
 import { LogIn, Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import AuthCard from "@/components/auth/AuthCard";
+import PasswordInput from "@/components/auth/PasswordInput";
 
 const inputCls =
   "w-full rounded-lg border border-white/[0.12] bg-[#0b0e14] px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-600 focus:border-cyan-500/50 focus:outline-none";
@@ -75,9 +76,9 @@ function LoginForm() {
               Forgot password?
             </Link>
           </div>
-          <input
+          <PasswordInput
             className={inputCls}
-            type="password"
+            
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="••••••••"
