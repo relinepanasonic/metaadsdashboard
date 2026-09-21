@@ -51,7 +51,7 @@ function LoginForm() {
   }
 
   return (
-    <AuthCard title="Unified Ads Command Center" subtitle="Sign in to continue">
+    <AuthCard title="Digital Ads Dashboard" subtitle="Sign in to continue">
       <form onSubmit={handleSubmit} className="flex flex-col gap-3.5">
         {error && (
           <div className="rounded-lg px-3 py-2 text-xs text-rose-300" style={{ boxShadow: "inset 0 0 0 1px rgba(251,113,133,0.3)" }}>
