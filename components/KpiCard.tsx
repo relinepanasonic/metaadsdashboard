@@ -16,6 +16,7 @@ interface KpiCardProps {
   value: string;
   delta?: string;
   deltaPositive?: boolean;
+  deltaLabel?: string; // what the delta is compared against
   icon: LucideIcon;
   accent?: Accent;
 }
@@ -25,6 +26,7 @@ export default function KpiCard({
   value,
   delta,
   deltaPositive = true,
+  deltaLabel = "vs last 30d",
   icon: Icon,
   accent = "cyan",
 }: KpiCardProps) {
@@ -55,7 +57,7 @@ export default function KpiCard({
       {delta && (
         <div className="mt-1 text-xs font-semibold" style={{ color: deltaPositive ? "#34d399" : "#fb7185" }}>
           {deltaPositive ? "▲" : "▼"} {delta}
-          <span className="ml-1 font-normal text-slate-500">vs last 30d</span>
+          <span className="ml-1 font-normal text-slate-500">{deltaLabel}</span>
         </div>
       )}
     </div>

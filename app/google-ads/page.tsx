@@ -1,24 +1,21 @@
 import { Globe } from "lucide-react";
 import { redirect } from "next/navigation";
 import PagePlaceholder from "@/components/PagePlaceholder";
-import { getCurrentUser } from "@/lib/auth/currentUser";
+import GoogleAdsDashboard from "@/components/google-ads/GoogleAdsDashboard";
+import { getCurrentUser, hasFullAccess } from "@/lib/auth/currentUser";
 
 export default async function GoogleAdsPage() {
   const me = await getCurrentUser();
   if (!me) redirect("/login");
 
+  const isClient = me.role === "client";
   return (
     <PagePlaceholder
       icon={Globe}
       title="Google Ads"
-      subtitle="Connect via google-ads-api Node SDK"
-      status="Coming Soon"
+      subtitle={isClient ? "Your Google Ads performance" : "Campaigns, keywords, search terms, audiences and account health"}
     >
-      <div className="glass-panel p-6 text-sm text-slate-400">
-        Google Ads integration is scaffolded in{" "}
-        <code className="rounded bg-white/[0.06] px-1.5 py-0.5 text-cyan-300">lib/services/googleAds.ts</code>.
-        We&apos;ll wire the live connection after Meta Ads is fully connected.
-      </div>
+      <GoogleAdsDashboard isClient={isClient} canConnect={hasFullAccess(me.role)} />
     </PagePlaceholder>
   );
 }

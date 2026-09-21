@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { loadAccounts, syncAccounts } from "@/lib/services/socialSync";
+import { syncAllGoogleAccounts } from "@/lib/services/googleAds";
 
 export const maxDuration = 300;
 
@@ -14,7 +15,18 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    return NextResponse.json({ ok: true, results: await syncAccounts(await loadAccounts(), 7) });
+    // Hobby allows two crons in total, so Google Ads rides along here. The two
+    // are independent: a Google failure never blocks the social sync or vice versa.
+    const [social, google] = await Promise.allSettled([
+      loadAccounts().then((rows) => syncAccounts(rows, 7)),
+      syncAllGoogleAccounts(),
+    ]);
+    return NextResponse.json({
+      ok: social.status === "fulfilled",
+      results: social.status === "fulfilled" ? social.value : [],
+      socialError: social.status === "rejected" ? String(social.reason) : undefined,
+      google: google.status === "fulfilled" ? google.value : { error: String(google.reason) },
+    });
   } catch (err) {
     return NextResponse.json({ ok: false, error: (err as Error).message }, { status: 500 });
   }

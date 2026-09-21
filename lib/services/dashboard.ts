@@ -8,7 +8,7 @@ import type {
   CampaignRow,
 } from "./types";
 import { fetchMetaAdsData } from "./metaAds";
-import { fetchGoogleAdsData, GOOGLE_CONNECTED } from "./googleAds";
+import { fetchGoogleAdsData } from "./googleAdsStats";
 import type { DateRange } from "./metaCampaigns";
 import { round } from "./mockUtils";
 
@@ -58,22 +58,23 @@ interface DashboardOptions {
   range?: DateRange;
   clientFilter?: string; // only campaigns resolved to this client
   platform?: Platform; // "meta" | "google" | "both" (default "both")
+  googleCustomerIds?: string[]; // Google Ads accounts to include (empty = none)
 }
 
 // No mock data — Meta is skipped if platform === "google", Google is only
 // included when platform !== "meta" AND it's actually connected.
 export async function getUnifiedDashboardData(opts: DashboardOptions = {}): Promise<UnifiedDashboardData> {
-  const { accountIds, range, clientFilter, platform = "both" } = opts;
+  const { accountIds, range, clientFilter, platform = "both", googleCustomerIds = [] } = opts;
 
   const wantMeta = platform !== "google";
-  const wantGoogle = platform !== "meta" && GOOGLE_CONNECTED;
+  const wantGoogle = platform !== "meta" && googleCustomerIds.length > 0;
 
   const meta = wantMeta ? await fetchMetaAdsData(accountIds, range, clientFilter) : null;
-  const google = wantGoogle ? await fetchGoogleAdsData() : null;
+  const google = wantGoogle ? await fetchGoogleAdsData(googleCustomerIds, range ?? {}).catch(() => null) : null;
 
   if (!meta && !google) {
     throw new Error(
-      platform === "google" ? "Google Ads not connected." : "Meta Ads not connected — set META_ACCESS_TOKEN."
+      platform === "google" ? "No Google Ads data yet — connect an account on the Google Ads page." : "Meta Ads not connected — set META_ACCESS_TOKEN."
     );
   }
 

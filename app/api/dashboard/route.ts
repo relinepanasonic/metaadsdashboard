@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getUnifiedDashboardData, type Platform } from "@/lib/services/dashboard";
 import { ACCOUNT_IDS } from "@/lib/services/metaCampaigns";
 import { getCurrentUser, hasFullAccess } from "@/lib/auth/currentUser";
+import { resolveGoogleCustomers } from "@/lib/services/googleAdsStats";
 
 export async function GET(req: NextRequest) {
   const me = await getCurrentUser();
@@ -25,12 +26,17 @@ export async function GET(req: NextRequest) {
   const clientFilter = req.nextUrl.searchParams.get("client") ?? undefined;
   const platform = (req.nextUrl.searchParams.get("platform") as Platform | null) ?? "both";
 
+  // Google Ads accounts are linked per brand (Clients page). Advertisers stay
+  // Meta-only until they get per-brand assignments.
+  const googleCustomerIds = hasFullAccess(me.role) ? await resolveGoogleCustomers(clientFilter) : [];
+
   try {
     const data = await getUnifiedDashboardData({
       accountIds,
       range: { since, until, preset },
       clientFilter,
       platform,
+      googleCustomerIds,
     });
     return NextResponse.json({ ok: true, data });
   } catch (err) {
