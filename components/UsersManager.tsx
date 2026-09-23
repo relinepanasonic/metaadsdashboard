@@ -82,7 +82,7 @@ export default function UsersManager({ myRole, myId }: { myRole: string; myId: s
     if (i.ok) setInvites(i.invites);
     if (a.ok) setAccounts(a.accounts);
     if (c.ok) {
-      setClients(c.clients);
+      setClients(((c.clients ?? []) as { name: string }[]).map((x) => x.name));
       setClientDetails(c.details ?? []);
     }
     setLoading(false);

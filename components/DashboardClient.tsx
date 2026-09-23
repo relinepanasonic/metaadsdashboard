@@ -50,7 +50,7 @@ export default function DashboardClient() {
       .catch(() => {});
     fetch("/api/clients", { cache: "no-store" })
       .then((r) => r.json())
-      .then((j) => j.ok && setClients(j.clients as string[]))
+      .then((j) => j.ok && setClients((j.clients as { name: string }[]).map((c) => c.name)))
       .catch(() => {});
   }, []);
 
