@@ -33,7 +33,6 @@ async function instagramPageIds(): Promise<Map<string, string>> {
   return out;
 }
 
-const MAX_ATTEMPTS = 3;
 const STALE_CLAIM_MINUTES = 30;
 
 // Make.com calls this on its schedule. It returns the posts whose time has
@@ -51,17 +50,15 @@ async function handle(req: NextRequest) {
   // Lets the app show "Make last checked N minutes ago".
   await db.from("scheduler_state").upsert({ key: "last_poll", value: now.toISOString(), updated_at: now.toISOString() }, { onConflict: "key" });
 
-  // A claim that never got a result (Make failed mid-run) goes back in the
-  // queue, up to MAX_ATTEMPTS times, and then is marked failed for a human.
+  // A claim that never got a result means Make stopped mid-run, or posted but could not
+  // report back. Re-posting automatically could publish it twice, so it is marked failed
+  // for a person to check the account and press Retry if it really did not go out.
   const staleBefore = new Date(now.getTime() - STALE_CLAIM_MINUTES * 60_000).toISOString();
-  const { data: stale } = await db.from("scheduled_post_targets").select("id,attempts").eq("status", "claimed").lt("claimed_at", staleBefore);
-  for (const t of stale ?? []) {
-    if (t.attempts >= MAX_ATTEMPTS) {
-      await db.from("scheduled_post_targets").update({ status: "failed", error: "Make did not report a result after several tries." }).eq("id", t.id).eq("status", "claimed");
-    } else {
-      await db.from("scheduled_post_targets").update({ status: "pending", claimed_at: null }).eq("id", t.id).eq("status", "claimed");
-    }
-  }
+  await db
+    .from("scheduled_post_targets")
+    .update({ status: "failed", error: "No result came back from Make. It may have been posted — check the account, then press Retry only if it did not go out." })
+    .eq("status", "claimed")
+    .lt("claimed_at", staleBefore);
 
   const { data: posts, error } = await db
     .from("scheduled_posts")
