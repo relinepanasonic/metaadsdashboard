@@ -66,6 +66,12 @@ export function validatePost(input: { contentType: ContentType; media: MediaItem
     return "TikTok needs a video.";
   }
 
+  // Instagram only accepts JPEG photos (a PNG is refused with an unhelpful error).
+  if (targets.some((t) => t.platform === "instagram")) {
+    const notJpeg = media.find((m) => m.kind === "image" && !/\.jpe?g($|\?)/i.test(m.name ?? m.url));
+    if (notJpeg) return `Instagram only accepts JPEG photos — "${notJpeg.name ?? "this photo"}" isn't one. Save it as .jpg first.`;
+  }
+
   for (const t of targets) {
     if (caption.length > CAPTION_LIMIT[t.platform]) {
       return `The caption is too long for ${PLATFORM_LABEL[t.platform]} (${caption.length}/${CAPTION_LIMIT[t.platform]}).`;
