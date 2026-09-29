@@ -13,6 +13,26 @@ function jobContentType(platform: string, type: string): string {
   return type;
 }
 
+// Make's Instagram module picks its account by the Facebook Page the Instagram
+// account is connected to, so each Instagram job carries that Page's id. Read once
+// per run from the token's Pages; an account the token cannot see simply gets null.
+async function instagramPageIds(): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  const token = process.env.META_ACCESS_TOKEN;
+  if (!token) return out;
+  try {
+    const res = await fetch(
+      `https://graph.facebook.com/${process.env.META_API_VERSION || "v21.0"}/me/accounts?fields=id,instagram_business_account{id}&limit=200&access_token=${token}`,
+      { cache: "no-store" }
+    );
+    const json = (await res.json()) as { data?: { id: string; instagram_business_account?: { id: string } }[] };
+    for (const page of json.data ?? []) if (page.instagram_business_account?.id) out.set(page.instagram_business_account.id, page.id);
+  } catch {
+    // Make can still use a fixed Page in its module if this lookup fails
+  }
+  return out;
+}
+
 const MAX_ATTEMPTS = 3;
 const STALE_CLAIM_MINUTES = 30;
 
@@ -66,6 +86,7 @@ async function handle(req: NextRequest) {
     .sort((a, b) => Date.parse(byPost.get(a.post_id)!.scheduled_at) - Date.parse(byPost.get(b.post_id)!.scheduled_at))
     .slice(0, limit);
 
+  const pageIds = ordered.some((t) => t.platform === "instagram") ? await instagramPageIds() : new Map<string, string>();
   const jobs = [];
   for (const t of ordered) {
     // The status filter makes the claim atomic: if another run got there first, no row comes back.
@@ -86,6 +107,8 @@ async function handle(req: NextRequest) {
       platform: t.platform,
       handle: t.handle,
       externalId: t.external_id,
+      // Facebook Page id: for Facebook it is the Page itself, for Instagram the Page the account is connected to
+      pageId: t.platform === "facebook" ? t.external_id : t.platform === "instagram" && t.external_id ? pageIds.get(t.external_id) ?? null : null,
       contentType: jobContentType(t.platform, p.content_type), // simplified per platform, see below
       originalContentType: p.content_type,
       caption: p.caption,
