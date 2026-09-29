@@ -5,6 +5,14 @@ import type { MediaItem } from "@/lib/services/scheduler";
 
 export const maxDuration = 60;
 
+// Instagram publishes every video as a Reel, and Facebook / TikTok treat a Reel as a plain
+// video, so Make only ever has to route on: reel | video | image | carousel | text.
+function jobContentType(platform: string, type: string): string {
+  if (platform === "instagram" && type === "video") return "reel";
+  if (platform !== "instagram" && type === "reel") return "video";
+  return type;
+}
+
 const MAX_ATTEMPTS = 3;
 const STALE_CLAIM_MINUTES = 30;
 
@@ -78,7 +86,8 @@ async function handle(req: NextRequest) {
       platform: t.platform,
       handle: t.handle,
       externalId: t.external_id,
-      contentType: p.content_type,
+      contentType: jobContentType(t.platform, p.content_type), // simplified per platform, see below
+      originalContentType: p.content_type,
       caption: p.caption,
       media,
       mediaUrl: media[0]?.url ?? null, // handy for single photo / video posts

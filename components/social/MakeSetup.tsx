@@ -79,10 +79,12 @@ export default function MakeSetup({ configured }: { configured: boolean }) {
             <table className="w-full min-w-[520px] text-[11px]">
               <thead className="bg-white/[0.04] text-left text-slate-500"><tr><th className="px-3 py-2">Platform / content</th><th className="px-3 py-2">Make module</th></tr></thead>
               <tbody className="text-slate-300">
-                <tr className="border-t border-white/[0.06]"><td className="px-3 py-2">Instagram · reel / video</td><td className="px-3 py-2">Instagram for Business → Create a Reel</td></tr>
+                <tr className="border-t border-white/[0.06]"><td className="px-3 py-2">Instagram · reel</td><td className="px-3 py-2">Instagram for Business → Create a Reel</td></tr>
                 <tr className="border-t border-white/[0.06]"><td className="px-3 py-2">Instagram · image</td><td className="px-3 py-2">Instagram for Business → Create a Photo Post</td></tr>
                 <tr className="border-t border-white/[0.06]"><td className="px-3 py-2">Instagram · carousel</td><td className="px-3 py-2">Instagram for Business → Create a Carousel Post</td></tr>
-                <tr className="border-t border-white/[0.06]"><td className="px-3 py-2">Facebook · video / image / text</td><td className="px-3 py-2">Facebook Pages → Upload a Video / Create a Photo / Create a Post</td></tr>
+                <tr className="border-t border-white/[0.06]"><td className="px-3 py-2">Facebook · video</td><td className="px-3 py-2">Facebook Pages → Upload a Video</td></tr>
+                <tr className="border-t border-white/[0.06]"><td className="px-3 py-2">Facebook · image</td><td className="px-3 py-2">Facebook Pages → Create a Photo</td></tr>
+                <tr className="border-t border-white/[0.06]"><td className="px-3 py-2">Facebook · text</td><td className="px-3 py-2">Facebook Pages → Create a Post</td></tr>
                 <tr className="border-t border-white/[0.06]"><td className="px-3 py-2">Threads</td><td className="px-3 py-2">Threads → Create a Post</td></tr>
                 <tr className="border-t border-white/[0.06]"><td className="px-3 py-2">TikTok</td><td className="px-3 py-2">TikTok → publish a video (check that your Make account offers it)</td></tr>
               </tbody>
@@ -92,12 +94,16 @@ export default function MakeSetup({ configured }: { configured: boolean }) {
         </Step>
 
         <Step n={5} title="After each publishing module: report back">
-          Add an HTTP → “Make a request” (POST, same Authorization header, body type <span className={b}>JSON</span>) to:
+          Add an HTTP → “Make a request” (POST, same Authorization header, <span className={b}>Body type: application/x-www-form-urlencoded</span>) to:
           <CopyBox text={resultUrl} />
-          Body when it worked:
-          <CopyBox multiline text={`{ "targetId": "{{targetId}}", "status": "published", "url": "{{permalink}}", "platformPostId": "{{id}}" }`} />
+          Fields when it worked (add one “Item” per line):
+          <CopyBox multiline text={`targetId       = (targetId from the Iterator)
+status         = published
+platformPostId = (the id the publishing module returns)`} />
           Right-click the publishing module → <span className={b}>Add error handler</span> → same HTTP call with the error, so failures show up here with the reason:
-          <CopyBox multiline text={`{ "targetId": "{{targetId}}", "status": "failed", "error": "{{error.message}}" }`} />
+          <CopyBox multiline text={`targetId = (targetId from the Iterator)
+status   = failed
+error    = (the error message from the error handler)`} />
         </Step>
 
         <Step n={6} title="Schedule the scenario">

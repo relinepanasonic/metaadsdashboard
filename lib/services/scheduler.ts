@@ -58,8 +58,8 @@ export function validatePost(input: { contentType: ContentType; media: MediaItem
     if (images !== 1 || videos > 0) return "Add exactly one photo.";
   } else if (contentType === "carousel") {
     if (media.length < 2 || media.length > 10) return "A carousel needs 2 to 10 photos or videos.";
-    const bad = targets.find((t) => t.platform === "tiktok");
-    if (bad) return "TikTok does not support carousels here — remove TikTok or use a single video.";
+    const bad = targets.find((t) => t.platform === "tiktok" || t.platform === "facebook");
+    if (bad) return `${PLATFORM_LABEL[bad.platform]} does not take carousels here — remove it, or post a single photo or video.`;
   }
 
   if (targets.some((t) => t.platform === "tiktok") && contentType !== "reel" && contentType !== "video") {

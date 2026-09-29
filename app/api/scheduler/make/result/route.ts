@@ -10,7 +10,14 @@ export async function POST(req: NextRequest) {
   if (!schedulerAuthorized(req)) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   if (!db) return NextResponse.json({ ok: false, error: "Database not configured" }, { status: 500 });
 
-  const body = (await req.json().catch(() => ({}))) as { targetId?: string; status?: string; url?: string; platformPostId?: string; error?: string };
+  // Make's "x-www-form-urlencoded" body type escapes error messages for you, JSON needs care with quotes — accept both.
+  type Body = { targetId?: string; status?: string; url?: string; platformPostId?: string; error?: string };
+  let body: Body = {};
+  if ((req.headers.get("content-type") ?? "").includes("application/x-www-form-urlencoded")) {
+    body = Object.fromEntries(new URLSearchParams(await req.text())) as Body;
+  } else {
+    body = (await req.json().catch(() => ({}))) as Body;
+  }
   if (!body.targetId) return NextResponse.json({ ok: false, error: "targetId is required" }, { status: 400 });
   if (body.status !== "published" && body.status !== "failed") {
     return NextResponse.json({ ok: false, error: 'status must be "published" or "failed"' }, { status: 400 });
