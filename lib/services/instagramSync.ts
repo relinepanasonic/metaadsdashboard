@@ -1,5 +1,5 @@
 import { db } from "@/lib/supabase/db";
-import { fetchProfile, fetchDayInsights, fetchRecentMedia, fetchDemographics, AUDIENCES, BREAKDOWNS } from "./instagram";
+import { fetchProfile, fetchDayInsights, fetchRecentMedia, fetchPostInsights, fetchDemographics, AUDIENCES, BREAKDOWNS } from "./instagram";
 
 export interface SyncResult {
   igUserId: string;
@@ -54,7 +54,7 @@ export async function syncInstagramAccount(igUserId: string, days: number): Prom
 
   let postsStored = 0;
   try {
-    const media = await fetchRecentMedia(igUserId);
+    const media = await fetchRecentMedia(igUserId, 50);
     if (media.length > 0) {
       const baseRow = (m: (typeof media)[number]) => ({
         media_id: m.id,
@@ -83,6 +83,27 @@ export async function syncInstagramAccount(igUserId: string, days: number): Prom
       }
       if (error) errors.push(`posts: ${error.message}`);
       else postsStored = media.length;
+
+      // Per-post results (reach, saves, shares, watch time, 3-second skip rate).
+      // These keep growing for a few weeks, so posts under 45 days old are
+      // re-read on every run; older ones keep their last stored values.
+      const cutoff = Date.now() - 45 * 86_400_000;
+      const recent = media.filter((m) => m.timestamp && Date.parse(m.timestamp) > cutoff);
+      const OPTIONAL = ["skip_rate", "reposts"]; // need migration 0023
+      let missingOptional = false;
+      const saveInsights = async (m: (typeof media)[number]) => {
+        const ins = await fetchPostInsights(m);
+        let row: Record<string, unknown> = { media_product_type: m.media_product_type ?? null, ...ins, insights_updated_at: new Date().toISOString() };
+        let { error: e } = await db!.from("instagram_posts").update(row).eq("media_id", m.id);
+        if (e && OPTIONAL.some((c) => e!.message.includes(c))) {
+          missingOptional = true;
+          row = Object.fromEntries(Object.entries(row).filter(([k]) => !OPTIONAL.includes(k)));
+          ({ error: e } = await db!.from("instagram_posts").update(row).eq("media_id", m.id));
+        }
+        if (e) errors.push(`post insights: ${e.message}`);
+      };
+      for (let i = 0; i < recent.length; i += 5) await Promise.all(recent.slice(i, i + 5).map(saveInsights));
+      if (missingOptional) errors.push("run migration 0023 to store Reel skip rate and reposts");
     }
   } catch (err) {
     errors.push(`posts: ${(err as Error).message}`);

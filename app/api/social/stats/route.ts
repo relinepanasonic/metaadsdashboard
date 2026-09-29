@@ -52,6 +52,46 @@ interface PostOut {
   comments_count: number | null;
   thumbnail_url: string | null;
   media_url: string | null;
+  media_product_type?: string | null;
+  reach?: number | null;
+  views?: number | null;
+  saved?: number | null;
+  shares?: number | null;
+  reposts?: number | null;
+  total_interactions?: number | null;
+  avg_watch_time_ms?: number | null;
+  total_watch_ms?: number | null;
+  skip_rate?: number | null;
+  follows?: number | null;
+  profile_visits?: number | null;
+}
+
+const POST_BASE = "media_id,ig_user_id,caption,media_type,permalink,posted_at,like_count,comments_count,thumbnail_url";
+const POST_INSIGHTS = "media_product_type,reach,views,saved,shares,total_interactions,avg_watch_time_ms,total_watch_ms,follows,profile_visits";
+// Newest column sets first. A column that doesn't exist yet (its migration hasn't
+// been run) makes Postgres refuse the whole select, so fall back to fewer columns
+// instead of losing every post.
+const POST_COLUMN_SETS = [
+  `${POST_BASE},media_url,${POST_INSIGHTS},skip_rate,reposts`, // 0018 + 0022 + 0023
+  `${POST_BASE},${POST_INSIGHTS},skip_rate,reposts`, // 0018 + 0023
+  `${POST_BASE},media_url,${POST_INSIGHTS}`, // 0018 + 0022
+  `${POST_BASE},${POST_INSIGHTS}`, // 0018
+  POST_BASE,
+];
+
+async function loadIgPosts(igIds: string[], postsSince: string): Promise<(PostOut & { ig_user_id: string })[]> {
+  let lastError: Error | null = null;
+  for (const cols of POST_COLUMN_SETS) {
+    try {
+      const rows = await fetchAll<PostOut & { ig_user_id: string }>((f, t) =>
+        db!.from("instagram_posts").select(cols).in("ig_user_id", igIds).gte("posted_at", postsSince).order("posted_at", { ascending: false }).range(f, t)
+      );
+      return rows.map((r) => ({ ...r, media_url: r.media_url ?? null }));
+    } catch (e) {
+      lastError = e as Error;
+    }
+  }
+  throw lastError ?? new Error("Could not read Instagram posts");
 }
 
 // Everything the Social Media page needs in one call: one entry per linked
@@ -81,17 +121,7 @@ export async function GET() {
             db!.from("instagram_snapshots").select("ig_user_id,snapshot_date,followers_count,reach,views,profile_views,accounts_engaged,total_interactions").in("ig_user_id", igIds).gte("snapshot_date", since).order("snapshot_date", { ascending: true }).range(f, t)
           )
         : Promise.resolve([] as (Snap & { ig_user_id: string })[]),
-      igIds.length
-        ? fetchAll<PostOut & { ig_user_id: string }>((f, t) =>
-            db!.from("instagram_posts").select("media_id,ig_user_id,caption,media_type,permalink,posted_at,like_count,comments_count,thumbnail_url,media_url").in("ig_user_id", igIds).gte("posted_at", postsSince).order("posted_at", { ascending: false }).range(f, t)
-          ).catch(() =>
-            // media_url on instagram_posts needs migration 0022 — fall back to
-            // without it so posts (and covers via thumbnail_url) still show.
-            fetchAll<PostOut & { ig_user_id: string }>((f, t) =>
-              db!.from("instagram_posts").select("media_id,ig_user_id,caption,media_type,permalink,posted_at,like_count,comments_count,thumbnail_url").in("ig_user_id", igIds).gte("posted_at", postsSince).order("posted_at", { ascending: false }).range(f, t)
-            ).then((rows) => rows.map((r) => ({ ...r, media_url: null })))
-          )
-        : Promise.resolve([] as (PostOut & { ig_user_id: string })[]),
+      igIds.length ? loadIgPosts(igIds, postsSince) : Promise.resolve([] as (PostOut & { ig_user_id: string })[]),
       fbIds.length
         ? fetchAll<{ page_id: string; snapshot_date: string; followers_count: number | null }>((f, t) =>
             db!.from("facebook_snapshots").select("page_id,snapshot_date,followers_count").in("page_id", fbIds).gte("snapshot_date", since).order("snapshot_date", { ascending: true }).range(f, t)

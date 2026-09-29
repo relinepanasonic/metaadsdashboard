@@ -164,6 +164,8 @@ export interface PostInsights {
   total_interactions?: number;
   avg_watch_time_ms?: number; // Reels
   total_watch_ms?: number; // Reels
+  skip_rate?: number; // Reels: % of plays gone within 3 seconds (the hook signal)
+  reposts?: number; // Reels
   follows?: number; // feed posts: follows that came from the post
   profile_visits?: number; // feed posts
 }
@@ -176,6 +178,8 @@ const POST_FIELD: Record<string, keyof PostInsights> = {
   total_interactions: "total_interactions",
   ig_reels_avg_watch_time: "avg_watch_time_ms",
   ig_reels_video_view_total_time: "total_watch_ms",
+  reels_skip_rate: "skip_rate",
+  reposts: "reposts",
   follows: "follows",
   profile_visits: "profile_visits",
 };
@@ -209,7 +213,7 @@ export async function fetchPostInsights(media: IgMedia): Promise<PostInsights> {
   const isReel = media.media_product_type === "REELS";
   const [base, extra] = await Promise.all([
     mediaMetrics(media.id, ["reach", "views", "saved", "shares", "total_interactions"]),
-    mediaMetrics(media.id, isReel ? ["ig_reels_avg_watch_time", "ig_reels_video_view_total_time"] : ["follows", "profile_visits"]),
+    mediaMetrics(media.id, isReel ? ["ig_reels_avg_watch_time", "ig_reels_video_view_total_time", "reels_skip_rate", "reposts"] : ["follows", "profile_visits"]),
   ]);
   return { ...base, ...extra };
 }

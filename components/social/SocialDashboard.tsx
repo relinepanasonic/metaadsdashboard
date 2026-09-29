@@ -6,6 +6,8 @@ import { Users, TrendingUp, Eye, UserCheck, MousePointerClick, RefreshCw, Loader
 import { ResponsiveContainer, ComposedChart, Area, LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from "recharts";
 import CustomSelect from "@/components/CustomSelect";
 import KpiCard from "@/components/KpiCard";
+import PostInsightsModal, { VerdictChip, type InsightPost } from "@/components/social/PostInsightsModal";
+import { judgeReel, type PostMetrics } from "@/lib/social/reelBadges";
 import { compactNumber, formatNumber } from "@/lib/format";
 
 interface Snapshot {
@@ -18,7 +20,7 @@ interface Snapshot {
   total_interactions: number | null;
 }
 
-interface Post {
+interface Post extends Partial<PostMetrics> {
   media_id: string;
   caption: string | null;
   media_type: string | null;
@@ -151,6 +153,7 @@ export default function SocialDashboard({ canManage = true }: { canManage?: bool
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [mounted, setMounted] = useState(false);
+  const [openPost, setOpenPost] = useState<(InsightPost & { accountId: string }) | null>(null);
 
   useEffect(() => setMounted(true), []);
 
@@ -352,7 +355,7 @@ export default function SocialDashboard({ canManage = true }: { canManage?: bool
   const topPosts = useMemo(() => {
     const cutoff = `${win.from}T00:00:00Z`;
     return selected
-      .flatMap((a) => a.posts.filter((p) => p.posted_at && p.posted_at >= cutoff && p.posted_at <= `${win.to}T23:59:59Z`).map((p) => ({ ...p, account: a.handle || a.clientName })))
+      .flatMap((a) => a.posts.filter((p) => p.posted_at && p.posted_at >= cutoff && p.posted_at <= `${win.to}T23:59:59Z`).map((p) => ({ ...p, account: a.handle || a.clientName, accountId: a.accountId })))
       .sort((a, b) => (b.like_count ?? 0) + (b.comments_count ?? 0) - ((a.like_count ?? 0) + (a.comments_count ?? 0)))
       .slice(0, 10);
   }, [selected, win]);
@@ -736,6 +739,7 @@ export default function SocialDashboard({ canManage = true }: { canManage?: bool
                   <th className="px-3 py-2.5 font-semibold">Account</th>
                   <th className="px-3 py-2.5 font-semibold">Post</th>
                   <th className="px-3 py-2.5 font-semibold">Type</th>
+                  <th className="px-3 py-2.5 font-semibold">Signals</th>
                   <th className="px-3 py-2.5 font-semibold">Date</th>
                   <th className="px-3 py-2.5 text-right font-semibold">Likes</th>
                   <th className="px-3 py-2.5 text-right font-semibold">Comments</th>
@@ -744,18 +748,18 @@ export default function SocialDashboard({ canManage = true }: { canManage?: bool
               <tbody>
                 {topPosts.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-3 py-6 text-center text-slate-500">No posts stored for this range. Posts need the Instagram permission described above.</td>
+                    <td colSpan={8} className="px-3 py-6 text-center text-slate-500">No posts stored for this range. Posts need the Instagram permission described above.</td>
                   </tr>
                 ) : (
                   topPosts.map((p) => (
-                    <tr key={p.media_id} className="border-t border-white/[0.05] hover:bg-white/[0.02]">
+                    <tr key={p.media_id} onClick={() => setOpenPost(p as InsightPost & { accountId: string })} className="cursor-pointer border-t border-white/[0.05] hover:bg-white/[0.04]" title="Click for full insights">
                       <td className="px-3 py-2.5">
                         <PostCover post={p} />
                       </td>
                       <td className="px-3 py-2.5 text-slate-400">{p.account}</td>
                       <td className="max-w-[340px] px-3 py-2.5">
                         {p.permalink ? (
-                          <a href={p.permalink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-slate-100 hover:text-cyan-300">
+                          <a href={p.permalink} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="inline-flex items-center gap-1 text-slate-100 hover:text-cyan-300">
                             <span className="truncate">{(p.caption ?? "(no caption)").slice(0, 80)}</span>
                             <ExternalLink size={10} className="shrink-0" />
                           </a>
@@ -764,6 +768,7 @@ export default function SocialDashboard({ canManage = true }: { canManage?: bool
                         )}
                       </td>
                       <td className="px-3 py-2.5 text-slate-400">{p.media_type?.replace("_", " ").toLowerCase() ?? dash}</td>
+                      <td className="px-3 py-2.5"><PostSignals post={p as PostMetrics} /></td>
                       <td className="px-3 py-2.5 text-slate-400">{p.posted_at?.slice(0, 10) ?? dash}</td>
                       <td className="px-3 py-2.5 text-right text-slate-300">{p.like_count != null ? formatNumber(p.like_count) : dash}</td>
                       <td className="px-3 py-2.5 text-right text-slate-300">{p.comments_count != null ? formatNumber(p.comments_count) : dash}</td>
@@ -775,6 +780,28 @@ export default function SocialDashboard({ canManage = true }: { canManage?: bool
           </div>
         </>
       )}
+
+      {openPost && (
+        <PostInsightsModal
+          post={openPost}
+          peers={selected.find((a) => a.accountId === openPost.accountId)?.posts ?? []}
+          onClose={() => setOpenPost(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+// Hook / Value / CTA verdicts for a Reel; only clear good/bad calls become chips.
+function PostSignals({ post }: { post: PostMetrics }) {
+  const v = judgeReel(post);
+  if (!v.applicable) return <span className="text-slate-700">—</span>;
+  if (v.tooEarly) return <span className="text-[10px] text-slate-600">too early</span>;
+  const chips = [v.hook, v.value, v.cta].filter((x) => x.grade === "good" || x.grade === "bad");
+  if (chips.length === 0) return <span className="text-[10px] text-slate-600">{v.hook.grade === "unknown" ? "run Sync" : "average"}</span>;
+  return (
+    <div className="flex flex-wrap gap-1">
+      {chips.map((c) => <VerdictChip key={c.label} v={c} />)}
     </div>
   );
 }
