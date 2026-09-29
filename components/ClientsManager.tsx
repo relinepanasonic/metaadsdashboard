@@ -3,12 +3,21 @@
 import { Fragment, useEffect, useState } from "react";
 import CustomSelect from "@/components/CustomSelect";
 import { Plus, Pencil, Trash2, Check, X, Loader2, Search, Globe2, Share2, Camera, ThumbsUp } from "lucide-react";
+import { PLATFORM_LABEL, PUBLISH_ONLY_PLATFORMS, type Platform } from "@/lib/services/scheduler";
 
 interface SocialAccount {
   id: string;
   platform: "instagram" | "facebook";
   external_id: string;
   handle: string | null;
+}
+
+// Threads / X / TikTok / YouTube accounts: used for scheduled posting only.
+interface PublishProfile {
+  id: string;
+  platform: Platform;
+  handle: string | null;
+  external_id: string | null;
 }
 
 interface Client {
@@ -22,6 +31,7 @@ interface Client {
   google_ads_account_id: string | null;
   created_at: string;
   social: SocialAccount[];
+  publishing: PublishProfile[];
 }
 
 type FormFields = {
@@ -36,6 +46,24 @@ const EMPTY_FORM: FormFields = { name: "", owner: "", websiteDomain: "", metaAdA
 
 function Cell({ value, placeholder }: { value: string | null; placeholder: string }) {
   return value ? <span className="text-slate-200">{value}</span> : <span className="text-slate-600">{placeholder}</span>;
+}
+
+// Small coloured tag for the publishing-only platforms.
+const PUBLISH_TAG: Record<string, { text: string; cls: string }> = {
+  threads: { text: "Th", cls: "bg-slate-200/15 text-slate-200" },
+  x: { text: "X", cls: "bg-slate-100/15 text-slate-100" },
+  tiktok: { text: "TT", cls: "bg-cyan-400/15 text-cyan-300" },
+  youtube: { text: "YT", cls: "bg-red-500/15 text-red-300" },
+};
+
+function ProfileChip({ a }: { a: PublishProfile }) {
+  const t = PUBLISH_TAG[a.platform];
+  return (
+    <span className="inline-flex items-center gap-1.5 text-slate-300" title={PLATFORM_LABEL[a.platform]}>
+      <span className={`grid h-[15px] min-w-[19px] place-items-center rounded px-1 text-[8px] font-black ${t?.cls ?? ""}`}>{t?.text ?? "?"}</span>
+      {a.handle || a.external_id}
+    </span>
+  );
 }
 
 function AccountChip({ a }: { a: SocialAccount }) {
@@ -194,7 +222,7 @@ export default function ClientsManager({ canDelete }: { canDelete: boolean }) {
               <th className="px-3 py-2.5 font-semibold">Brand</th>
               <th className="px-3 py-2.5 font-semibold">Website</th>
               <th className="px-3 py-2.5 font-semibold">Meta Ads</th>
-              <th className="px-3 py-2.5 font-semibold">Instagram &amp; Facebook</th>
+              <th className="px-3 py-2.5 font-semibold">Social accounts</th>
               <th className="px-3 py-2.5 font-semibold">Google</th>
               <th className="px-3 py-2.5 text-right font-semibold"></th>
             </tr>
@@ -211,18 +239,21 @@ export default function ClientsManager({ canDelete }: { canDelete: boolean }) {
 
                 const socialCell = (
                   <div className="flex flex-col items-start gap-0.5">
-                    {c.social.length === 0 ? (
+                    {c.social.length + c.publishing.length === 0 ? (
                       <span className="text-slate-600">—</span>
                     ) : (
                       <>
                         {c.social.slice(0, 3).map((a) => (
                           <AccountChip key={a.id} a={a} />
                         ))}
-                        {c.social.length > 3 && <span className="text-[10px] text-slate-500">+{c.social.length - 3} more</span>}
+                        {c.publishing.slice(0, Math.max(0, 5 - Math.min(c.social.length, 3))).map((a) => (
+                          <ProfileChip key={a.id} a={a} />
+                        ))}
+                        {c.social.length + c.publishing.length > 5 && <span className="text-[10px] text-slate-500">+{c.social.length + c.publishing.length - 5} more</span>}
                       </>
                     )}
                     <button onClick={() => setSocialOpenId(socialOpen ? null : c.id)} className="mt-0.5 text-[10px] font-semibold text-cyan-300 hover:underline">
-                      {socialOpen ? "Close" : c.social.length === 0 ? "Add accounts" : "Manage"}
+                      {socialOpen ? "Close" : c.social.length + c.publishing.length === 0 ? "Add accounts" : "Manage"}
                     </button>
                   </div>
                 );
@@ -290,6 +321,7 @@ export default function ClientsManager({ canDelete }: { canDelete: boolean }) {
                       <tr className="bg-white/[0.02]">
                         <td colSpan={8} className="px-3 pb-4 pt-1">
                           <SocialAccountsEditor client={c} onChanged={load} />
+                          <PublishProfilesEditor client={c} onChanged={load} />
                         </td>
                       </tr>
                     )}
@@ -406,7 +438,7 @@ function SocialAccountsEditor({ client, onChanged }: { client: Client; onChanged
   return (
     <div className="rounded-lg border border-white/[0.07] bg-[#0b0e14]/60 p-3">
       <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-        Instagram &amp; Facebook accounts for {client.name} ({client.social.length})
+        Instagram &amp; Facebook accounts for {client.name} ({client.social.length}) — also shown on the Social Media dashboard
       </div>
 
       {client.social.length > 0 && (
@@ -498,6 +530,77 @@ function SocialAccountsEditor({ client, onChanged }: { client: Client; onChanged
       </div>
 
       {okMsg && <div className="mt-2 text-[11px] text-emerald-300">✓ {okMsg}</div>}
+      {err && <div className="mt-2 text-[11px] text-rose-300">{err}</div>}
+    </div>
+  );
+}
+
+// Threads, X, TikTok and YouTube accounts for one client. These are only used to
+// schedule posts (Scheduler tab); nothing is pulled from them into the Dashboard.
+function PublishProfilesEditor({ client, onChanged }: { client: Client; onChanged: () => void }) {
+  const [platform, setPlatform] = useState<Platform>("threads");
+  const [handle, setHandle] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  async function add() {
+    if (!handle.trim()) return;
+    setBusy(true);
+    setErr("");
+    const res = await fetch("/api/scheduler/profiles", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ clientId: client.id, platform, handle }),
+    }).then((r) => r.json()).catch(() => ({ ok: false, error: "Network error" }));
+    setBusy(false);
+    if (!res.ok) return setErr(res.error || "Could not add the account.");
+    setHandle("");
+    onChanged();
+  }
+
+  async function remove(a: PublishProfile) {
+    if (!window.confirm(`Remove ${a.handle ?? "this account"} from ${client.name}? Scheduled posts already queued for it stay as they are.`)) return;
+    await fetch(`/api/scheduler/profiles?id=${a.id}`, { method: "DELETE" });
+    onChanged();
+  }
+
+  return (
+    <div className="mt-3 rounded-lg border border-white/[0.07] bg-[#0b0e14]/60 p-3">
+      <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+        Publishing accounts for {client.name} — Threads, X, TikTok, YouTube Shorts ({client.publishing.length})
+      </div>
+
+      {client.publishing.length > 0 && (
+        <div className="mb-3 flex flex-wrap gap-2">
+          {client.publishing.map((a) => (
+            <span key={a.id} className="inline-flex items-center gap-2 rounded-md bg-white/[0.05] px-2 py-1 text-xs">
+              <ProfileChip a={a} />
+              <button onClick={() => remove(a)} title="Remove" className="text-slate-500 hover:text-rose-300"><X size={11} /></button>
+            </span>
+          ))}
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-end gap-2">
+        <div className="w-[150px]">
+          <div className="mb-1 text-[10px] uppercase tracking-wider text-slate-500">Platform</div>
+          <CustomSelect size="sm" value={platform} onChange={(v) => setPlatform(v as Platform)} options={PUBLISH_ONLY_PLATFORMS.map((p) => ({ value: p, label: PLATFORM_LABEL[p] }))} />
+        </div>
+        <div>
+          <div className="mb-1 text-[10px] uppercase tracking-wider text-slate-500">Username / channel</div>
+          <input
+            value={handle}
+            onChange={(e) => setHandle(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && add()}
+            placeholder="@username"
+            className="w-[220px] rounded-lg border border-white/[0.12] bg-[#0b0e14] px-2.5 py-1.5 text-[11px] text-slate-100 placeholder:text-slate-600 focus:border-cyan-500/50 focus:outline-none"
+          />
+        </div>
+        <button onClick={add} disabled={busy || !handle.trim()} className="rounded-lg bg-cyan-500/15 px-3 py-1.5 text-[11px] font-semibold text-cyan-300 hover:bg-cyan-500/25 disabled:opacity-50">
+          {busy ? "Adding…" : "Add account"}
+        </button>
+      </div>
+      <p className="mt-2 text-[10px] text-slate-600">The name is just a label so you can pick the right account when scheduling. The actual login for each platform is connected once in Make.com.</p>
       {err && <div className="mt-2 text-[11px] text-rose-300">{err}</div>}
     </div>
   );

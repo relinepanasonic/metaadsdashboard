@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/supabase/db";
 import { schedulerAuthorized, schedulerConfigured } from "@/lib/services/schedulerAuth";
-import type { MediaItem } from "@/lib/services/scheduler";
+import { titleFromCaption, type MediaItem } from "@/lib/services/scheduler";
 
 export const maxDuration = 60;
 
@@ -109,6 +109,7 @@ async function handle(req: NextRequest) {
       contentType: jobContentType(t.platform, p.content_type), // simplified per platform, see below
       originalContentType: p.content_type,
       caption: p.caption,
+      title: titleFromCaption(p.caption), // first line, for YouTube
       media,
       mediaUrl: media[0]?.url ?? null, // handy for single photo / video posts
       mediaUrls: media.map((m) => m.url),

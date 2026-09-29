@@ -6,7 +6,7 @@ import { AlertTriangle, ImagePlus, Loader2, Plus, Trash2, X } from "lucide-react
 import CustomSelect from "@/components/CustomSelect";
 import { createClient } from "@/lib/supabase/client";
 import {
-  CAPTION_LIMIT, CONTENT_LABEL, PLATFORM_LABEL, PLATFORMS, validatePost,
+  CAPTION_LIMIT, CONTENT_LABEL, PLATFORM_LABEL, PLATFORMS, PUBLISH_ONLY_PLATFORMS, validatePost,
   type ContentType, type MediaItem, type Platform,
 } from "@/lib/services/scheduler";
 
@@ -58,7 +58,7 @@ export default function PostComposer({ options, post, onClose, onSaved, onOption
   const [uploading, setUploading] = useState(0);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
-  const [newProfile, setNewProfile] = useState<{ platform: "threads" | "tiktok"; handle: string }>({ platform: "threads", handle: "" });
+  const [newProfile, setNewProfile] = useState<{ platform: Platform; handle: string }>({ platform: "threads", handle: "" });
   const [addingProfile, setAddingProfile] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -215,7 +215,7 @@ export default function PostComposer({ options, post, onClose, onSaved, onOption
                   <div className="mb-1.5 text-[11px] font-semibold text-slate-300">{PLATFORM_LABEL[platform]}</div>
                   {list.length === 0 ? (
                     <div className="text-[11px] text-slate-600">
-                      {platform === "instagram" || platform === "facebook" ? "None linked — add it on the Clients page." : "None added yet."}
+                      {platform === "instagram" || platform === "facebook" ? "None linked — add it on the Clients page." : "None yet — add it on the Clients page."}
                     </div>
                   ) : (
                     list.map((a) => {
@@ -239,13 +239,13 @@ export default function PostComposer({ options, post, onClose, onSaved, onOption
             <div className="mt-2">
               {addingProfile ? (
                 <div className="flex flex-wrap items-center gap-2">
-                  <div className="w-[120px]"><CustomSelect size="sm" value={newProfile.platform} onChange={(v) => setNewProfile((p) => ({ ...p, platform: v as "threads" | "tiktok" }))} options={[{ value: "threads", label: "Threads" }, { value: "tiktok", label: "TikTok" }]} /></div>
+                  <div className="w-[150px]"><CustomSelect size="sm" value={newProfile.platform} onChange={(v) => setNewProfile((p) => ({ ...p, platform: v as Platform }))} options={PUBLISH_ONLY_PLATFORMS.map((p) => ({ value: p, label: PLATFORM_LABEL[p] }))} /></div>
                   <input value={newProfile.handle} onChange={(e) => setNewProfile((p) => ({ ...p, handle: e.target.value }))} onKeyDown={(e) => e.key === "Enter" && addProfile()} placeholder="@username" className={`${inputCls} max-w-[200px]`} />
                   <button type="button" onClick={addProfile} className="rounded-lg bg-cyan-500/15 px-3 py-2 text-xs font-semibold text-cyan-300 hover:bg-cyan-500/25">Add</button>
                   <button type="button" onClick={() => setAddingProfile(false)} className="text-xs text-slate-500 hover:text-slate-300">Cancel</button>
                 </div>
               ) : (
-                <button type="button" onClick={() => setAddingProfile(true)} className="inline-flex items-center gap-1 text-[11px] font-semibold text-cyan-300 hover:underline"><Plus size={12} /> Add a Threads or TikTok account</button>
+                <button type="button" onClick={() => setAddingProfile(true)} className="inline-flex items-center gap-1 text-[11px] font-semibold text-cyan-300 hover:underline"><Plus size={12} /> Add a Threads, X, TikTok or YouTube account</button>
               )}
             </div>
           )}

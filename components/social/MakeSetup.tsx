@@ -86,6 +86,8 @@ export default function MakeSetup({ configured }: { configured: boolean }) {
                 <tr className="border-t border-white/[0.06]"><td className="px-3 py-2">Facebook · image</td><td className="px-3 py-2">Facebook Pages → Create a Photo</td></tr>
                 <tr className="border-t border-white/[0.06]"><td className="px-3 py-2">Facebook · text</td><td className="px-3 py-2">Facebook Pages → Create a Post</td></tr>
                 <tr className="border-t border-white/[0.06]"><td className="px-3 py-2">Threads</td><td className="px-3 py-2">Threads → Create a Post</td></tr>
+                <tr className="border-t border-white/[0.06]"><td className="px-3 py-2">X · text / image / video</td><td className="px-3 py-2">X (Twitter) → Create a Post (photos and video need the upload step first)</td></tr>
+                <tr className="border-t border-white/[0.06]"><td className="px-3 py-2">YouTube Shorts · video</td><td className="px-3 py-2">YouTube → Upload a Video (title = <span className={b}>title</span>, description = <span className={b}>caption</span>; vertical and under 3 minutes makes it a Short)</td></tr>
                 <tr className="border-t border-white/[0.06]"><td className="px-3 py-2">TikTok</td><td className="px-3 py-2">TikTok → publish a video (check that your Make account offers it)</td></tr>
               </tbody>
             </table>

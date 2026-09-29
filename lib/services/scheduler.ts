@@ -2,17 +2,23 @@
 // validation both the composer and the API use. (Safe to import from the browser;
 // the server-only Make.com secret check lives in schedulerAuth.ts.)
 
-export type Platform = "instagram" | "facebook" | "threads" | "tiktok";
+export type Platform = "instagram" | "facebook" | "threads" | "x" | "tiktok" | "youtube";
 export type ContentType = "reel" | "video" | "image" | "carousel" | "text";
 export type TargetStatus = "pending" | "claimed" | "published" | "failed" | "cancelled";
 
-export const PLATFORMS: Platform[] = ["instagram", "facebook", "threads", "tiktok"];
+export const PLATFORMS: Platform[] = ["instagram", "facebook", "threads", "x", "tiktok", "youtube"];
+
+// Accounts for these are linked on the Clients page as "publishing accounts"
+// (Instagram and Facebook are linked there too, but also feed the Dashboard).
+export const PUBLISH_ONLY_PLATFORMS: Platform[] = ["threads", "x", "tiktok", "youtube"];
 
 export const PLATFORM_LABEL: Record<Platform, string> = {
   instagram: "Instagram",
   facebook: "Facebook",
   threads: "Threads",
+  x: "X",
   tiktok: "TikTok",
+  youtube: "YouTube Shorts",
 };
 
 export const CONTENT_LABEL: Record<ContentType, string> = {
@@ -23,8 +29,9 @@ export const CONTENT_LABEL: Record<ContentType, string> = {
   text: "Text only",
 };
 
-// Caption limits published by each platform.
-export const CAPTION_LIMIT: Record<Platform, number> = { instagram: 2200, facebook: 63206, threads: 500, tiktok: 2200 };
+// Caption limits published by each platform (YouTube: the description; the first line is the title).
+export const CAPTION_LIMIT: Record<Platform, number> = { instagram: 2200, facebook: 63206, threads: 500, x: 280, tiktok: 2200, youtube: 5000 };
+export const YOUTUBE_TITLE_LIMIT = 100;
 
 export interface MediaItem {
   url: string;
@@ -39,10 +46,16 @@ export interface TargetInput {
   externalId?: string | null;
 }
 
+// The first line of the caption, used as the YouTube video title.
+export function titleFromCaption(caption: string): string {
+  return (caption.split(/\r?\n/).find((l) => l.trim()) ?? "").trim().slice(0, YOUTUBE_TITLE_LIMIT);
+}
+
 // Returns an error message, or null when the combination can actually be posted.
 export function validatePost(input: { contentType: ContentType; media: MediaItem[]; caption: string; targets: TargetInput[] }): string | null {
   const { contentType, media, caption, targets } = input;
   if (targets.length === 0) return "Pick at least one account to post to.";
+  const has = (p: Platform) => targets.some((t) => t.platform === p);
 
   const videos = media.filter((m) => m.kind === "video").length;
   const images = media.filter((m) => m.kind === "image").length;
@@ -50,7 +63,7 @@ export function validatePost(input: { contentType: ContentType; media: MediaItem
   if (contentType === "text") {
     if (media.length > 0) return "A text-only post cannot have media.";
     if (!caption.trim()) return "Write some text to post.";
-    const bad = targets.find((t) => t.platform === "instagram" || t.platform === "tiktok");
+    const bad = targets.find((t) => t.platform === "instagram" || t.platform === "tiktok" || t.platform === "youtube");
     if (bad) return `${PLATFORM_LABEL[bad.platform]} cannot publish text-only posts — add a photo or video, or remove it.`;
   } else if (contentType === "reel" || contentType === "video") {
     if (videos !== 1 || images > 0) return "Add exactly one video.";
@@ -58,16 +71,22 @@ export function validatePost(input: { contentType: ContentType; media: MediaItem
     if (images !== 1 || videos > 0) return "Add exactly one photo.";
   } else if (contentType === "carousel") {
     if (media.length < 2 || media.length > 10) return "A carousel needs 2 to 10 photos or videos.";
-    const bad = targets.find((t) => t.platform === "tiktok" || t.platform === "facebook");
+    const bad = targets.find((t) => t.platform === "tiktok" || t.platform === "facebook" || t.platform === "youtube");
     if (bad) return `${PLATFORM_LABEL[bad.platform]} does not take carousels here — remove it, or post a single photo or video.`;
+    if (has("x") && (media.length > 4 || videos > 0)) return "X takes up to 4 photos in one post (no videos in a set) — remove X or trim the photos.";
   }
 
-  if (targets.some((t) => t.platform === "tiktok") && contentType !== "reel" && contentType !== "video") {
-    return "TikTok needs a video.";
+  if ((has("tiktok") || has("youtube")) && contentType !== "reel" && contentType !== "video") {
+    return `${has("youtube") ? "YouTube Shorts" : "TikTok"} needs a video.`;
+  }
+
+  if (has("youtube")) {
+    if (!titleFromCaption(caption)) return "YouTube needs a title — write it as the first line of the caption.";
+    if (caption.split(/\r?\n/).find((l) => l.trim())!.trim().length > YOUTUBE_TITLE_LIMIT) return `The first line becomes the YouTube title and must be ${YOUTUBE_TITLE_LIMIT} characters or fewer.`;
   }
 
   // Instagram only accepts JPEG photos (a PNG is refused with an unhelpful error).
-  if (targets.some((t) => t.platform === "instagram")) {
+  if (has("instagram")) {
     const notJpeg = media.find((m) => m.kind === "image" && !/\.jpe?g($|\?)/i.test(m.name ?? m.url));
     if (notJpeg) return `Instagram only accepts JPEG photos — "${notJpeg.name ?? "this photo"}" isn't one. Save it as .jpg first.`;
   }
