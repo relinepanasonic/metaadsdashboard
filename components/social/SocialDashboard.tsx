@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { Users, TrendingUp, Eye, UserCheck, MousePointerClick, RefreshCw, Loader2, AlertTriangle, ExternalLink, Filter, Camera, ThumbsUp, History } from "lucide-react";
+import { Users, TrendingUp, Eye, UserCheck, MousePointerClick, RefreshCw, Loader2, AlertTriangle, ExternalLink, Filter, Camera, ThumbsUp, History, Play, ImageOff } from "lucide-react";
 import { ResponsiveContainer, ComposedChart, Area, LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from "recharts";
 import CustomSelect from "@/components/CustomSelect";
 import KpiCard from "@/components/KpiCard";
@@ -26,6 +26,8 @@ interface Post {
   posted_at: string | null;
   like_count: number | null;
   comments_count: number | null;
+  thumbnail_url: string | null;
+  media_url: string | null;
 }
 
 interface Demo {
@@ -730,6 +732,7 @@ export default function SocialDashboard({ canManage = true }: { canManage?: bool
             <table className="w-full min-w-[720px] border-collapse text-xs">
               <thead>
                 <tr className="text-left text-[10px] uppercase tracking-wider text-slate-500">
+                  <th className="px-3 py-2.5 font-semibold">Cover</th>
                   <th className="px-3 py-2.5 font-semibold">Account</th>
                   <th className="px-3 py-2.5 font-semibold">Post</th>
                   <th className="px-3 py-2.5 font-semibold">Type</th>
@@ -741,11 +744,14 @@ export default function SocialDashboard({ canManage = true }: { canManage?: bool
               <tbody>
                 {topPosts.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-3 py-6 text-center text-slate-500">No posts stored for this range. Posts need the Instagram permission described above.</td>
+                    <td colSpan={7} className="px-3 py-6 text-center text-slate-500">No posts stored for this range. Posts need the Instagram permission described above.</td>
                   </tr>
                 ) : (
                   topPosts.map((p) => (
                     <tr key={p.media_id} className="border-t border-white/[0.05] hover:bg-white/[0.02]">
+                      <td className="px-3 py-2.5">
+                        <PostCover post={p} />
+                      </td>
                       <td className="px-3 py-2.5 text-slate-400">{p.account}</td>
                       <td className="max-w-[340px] px-3 py-2.5">
                         {p.permalink ? (
@@ -770,6 +776,43 @@ export default function SocialDashboard({ canManage = true }: { canManage?: bool
         </>
       )}
     </div>
+  );
+}
+
+// Instagram's thumbnail/media CDN links expire after about a day, so a link
+// that's gone stale (post fell out of the last-30-media sync window) just
+// falls back to a type icon instead of a broken image.
+function PostCover({ post }: { post: Post }) {
+  const src = post.thumbnail_url || post.media_url;
+  const [failed, setFailed] = useState(false);
+  const isVideo = post.media_type === "VIDEO" || post.media_type === "REELS";
+
+  if (!src || failed) {
+    return (
+      <div className="grid h-11 w-11 place-items-center rounded-lg bg-white/[0.04] text-slate-600" style={{ boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.06)" }}>
+        <ImageOff size={16} />
+      </div>
+    );
+  }
+
+  const img = (
+    <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-lg bg-white/[0.04]" style={{ boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.06)" }}>
+      {/* eslint-disable-next-line @next/next/no-img-element -- external, short-lived Meta CDN URL; not worth Next/Image's optimizer */}
+      <img src={src} alt="" className="h-full w-full object-cover" onError={() => setFailed(true)} />
+      {isVideo && (
+        <span className="absolute inset-0 grid place-items-center bg-black/25">
+          <Play size={14} className="fill-white text-white" />
+        </span>
+      )}
+    </div>
+  );
+
+  return post.permalink ? (
+    <a href={post.permalink} target="_blank" rel="noopener noreferrer" className="inline-block">
+      {img}
+    </a>
+  ) : (
+    img
   );
 }
 

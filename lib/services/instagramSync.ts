@@ -66,6 +66,11 @@ export async function syncInstagramAccount(igUserId: string, days: number): Prom
           posted_at: m.timestamp ?? null,
           like_count: m.like_count ?? null,
           comments_count: m.comments_count ?? null,
+          // These CDN links expire (~24h), so they're only good for as long as a
+          // post keeps showing up in fetchRecentMedia — this upsert refreshes
+          // them every night for whatever's still in that window.
+          thumbnail_url: m.thumbnail_url ?? null,
+          media_url: m.media_url ?? null,
           updated_at: new Date().toISOString(),
         })),
         { onConflict: "media_id" }

@@ -50,6 +50,8 @@ interface PostOut {
   posted_at: string | null;
   like_count: number | null;
   comments_count: number | null;
+  thumbnail_url: string | null;
+  media_url: string | null;
 }
 
 // Everything the Social Media page needs in one call: one entry per linked
@@ -81,7 +83,7 @@ export async function GET() {
         : Promise.resolve([] as (Snap & { ig_user_id: string })[]),
       igIds.length
         ? fetchAll<PostOut & { ig_user_id: string }>((f, t) =>
-            db!.from("instagram_posts").select("media_id,ig_user_id,caption,media_type,permalink,posted_at,like_count,comments_count").in("ig_user_id", igIds).gte("posted_at", postsSince).order("posted_at", { ascending: false }).range(f, t)
+            db!.from("instagram_posts").select("media_id,ig_user_id,caption,media_type,permalink,posted_at,like_count,comments_count,thumbnail_url,media_url").in("ig_user_id", igIds).gte("posted_at", postsSince).order("posted_at", { ascending: false }).range(f, t)
           )
         : Promise.resolve([] as (PostOut & { ig_user_id: string })[]),
       fbIds.length
@@ -124,7 +126,7 @@ export async function GET() {
           .map((s) => ({ snapshot_date: s.snapshot_date, followers_count: s.followers_count, reach: null, views: null, profile_views: null, accounts_engaged: null, total_interactions: null }));
         posts = fbPosts
           .filter((p) => p.page_id === account.external_id)
-          .map((p) => ({ media_id: p.post_id, caption: p.message, media_type: "facebook post", permalink: p.permalink, posted_at: p.posted_at, like_count: p.reactions_count, comments_count: p.comments_count }));
+          .map((p) => ({ media_id: p.post_id, caption: p.message, media_type: "facebook post", permalink: p.permalink, posted_at: p.posted_at, like_count: p.reactions_count, comments_count: p.comments_count, thumbnail_url: null, media_url: null }));
       }
       return {
         accountId: account.id,
