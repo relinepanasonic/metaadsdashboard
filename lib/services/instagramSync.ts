@@ -56,25 +56,31 @@ export async function syncInstagramAccount(igUserId: string, days: number): Prom
   try {
     const media = await fetchRecentMedia(igUserId);
     if (media.length > 0) {
-      const { error } = await db.from("instagram_posts").upsert(
-        media.map((m) => ({
-          media_id: m.id,
-          ig_user_id: igUserId,
-          caption: m.caption ?? null,
-          media_type: m.media_type ?? null,
-          permalink: m.permalink ?? null,
-          posted_at: m.timestamp ?? null,
-          like_count: m.like_count ?? null,
-          comments_count: m.comments_count ?? null,
-          // These CDN links expire (~24h), so they're only good for as long as a
-          // post keeps showing up in fetchRecentMedia — this upsert refreshes
-          // them every night for whatever's still in that window.
-          thumbnail_url: m.thumbnail_url ?? null,
-          media_url: m.media_url ?? null,
-          updated_at: new Date().toISOString(),
-        })),
+      const baseRow = (m: (typeof media)[number]) => ({
+        media_id: m.id,
+        ig_user_id: igUserId,
+        caption: m.caption ?? null,
+        media_type: m.media_type ?? null,
+        permalink: m.permalink ?? null,
+        posted_at: m.timestamp ?? null,
+        like_count: m.like_count ?? null,
+        comments_count: m.comments_count ?? null,
+        // These CDN links expire (~24h), so they're only good for as long as a
+        // post keeps showing up in fetchRecentMedia — this upsert refreshes
+        // them every night for whatever's still in that window.
+        thumbnail_url: m.thumbnail_url ?? null,
+        updated_at: new Date().toISOString(),
+      });
+      let { error } = await db.from("instagram_posts").upsert(
+        media.map((m) => ({ ...baseRow(m), media_url: m.media_url ?? null })),
         { onConflict: "media_id" }
       );
+      // media_url needs migration 0022 — fall back to storing without it so
+      // captions/likes/thumbnails still sync until that's run.
+      if (error?.message.includes("media_url")) {
+        ({ error } = await db.from("instagram_posts").upsert(media.map(baseRow), { onConflict: "media_id" }));
+        if (!error) errors.push("posts: media_url column missing — run migration 0022");
+      }
       if (error) errors.push(`posts: ${error.message}`);
       else postsStored = media.length;
     }

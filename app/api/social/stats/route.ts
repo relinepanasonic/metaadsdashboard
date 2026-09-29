@@ -84,6 +84,12 @@ export async function GET() {
       igIds.length
         ? fetchAll<PostOut & { ig_user_id: string }>((f, t) =>
             db!.from("instagram_posts").select("media_id,ig_user_id,caption,media_type,permalink,posted_at,like_count,comments_count,thumbnail_url,media_url").in("ig_user_id", igIds).gte("posted_at", postsSince).order("posted_at", { ascending: false }).range(f, t)
+          ).catch(() =>
+            // media_url on instagram_posts needs migration 0022 — fall back to
+            // without it so posts (and covers via thumbnail_url) still show.
+            fetchAll<PostOut & { ig_user_id: string }>((f, t) =>
+              db!.from("instagram_posts").select("media_id,ig_user_id,caption,media_type,permalink,posted_at,like_count,comments_count,thumbnail_url").in("ig_user_id", igIds).gte("posted_at", postsSince).order("posted_at", { ascending: false }).range(f, t)
+            ).then((rows) => rows.map((r) => ({ ...r, media_url: null })))
           )
         : Promise.resolve([] as (PostOut & { ig_user_id: string })[]),
       fbIds.length
