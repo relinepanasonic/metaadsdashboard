@@ -320,8 +320,7 @@ export default function ClientsManager({ canDelete }: { canDelete: boolean }) {
                     {socialOpen && (
                       <tr className="bg-white/[0.02]">
                         <td colSpan={8} className="px-3 pb-4 pt-1">
-                          <SocialAccountsEditor client={c} onChanged={load} />
-                          <PublishProfilesEditor client={c} onChanged={load} />
+                          <AccountsEditor client={c} onChanged={load} />
                         </td>
                       </tr>
                     )}
@@ -363,12 +362,26 @@ function RowInput({ value, onChange, placeholder }: { value: string; onChange: (
 
 type Found = { id: string; label: string };
 
-// Manages every Instagram account and Facebook Page linked to one client.
-// Adding works two ways: pick from what the Meta token can list, or paste an
-// ID and press Check (needed for accounts the list can't show, e.g. an
-// Instagram account that isn't attached to a Facebook Page the token sees).
-function SocialAccountsEditor({ client, onChanged }: { client: Client; onChanged: () => void }) {
-  const [platform, setPlatform] = useState<"instagram" | "facebook">("instagram");
+// One place to manage every account of a client: Instagram and Facebook (their numbers
+// also feed the Social Media dashboard) and Threads, X, TikTok and YouTube (used only
+// for scheduled posting). Instagram / Facebook are added by ID (pick from what the Meta
+// token can list, or paste an ID and press Check); the others only need a username.
+type AnyPlatform = "instagram" | "facebook" | Platform;
+
+const PLATFORM_OPTIONS: { value: AnyPlatform; label: string }[] = [
+  { value: "instagram", label: "Instagram" },
+  { value: "facebook", label: "Facebook Page" },
+  { value: "threads", label: "Threads" },
+  { value: "x", label: "X" },
+  { value: "tiktok", label: "TikTok" },
+  { value: "youtube", label: "YouTube Shorts" },
+];
+
+const inputCls = "w-full rounded-md border border-white/[0.12] bg-[#0b0e14] px-2.5 py-1.5 text-xs text-slate-100 placeholder:text-slate-600 focus:border-cyan-500/50 focus:outline-none";
+const fieldLabel = "mb-1 text-[10px] uppercase tracking-wider text-slate-500";
+
+function AccountsEditor({ client, onChanged }: { client: Client; onChanged: () => void }) {
+  const [platform, setPlatform] = useState<AnyPlatform>("instagram");
   const [externalId, setExternalId] = useState("");
   const [handle, setHandle] = useState("");
   const [found, setFound] = useState<Found[] | null>(null);
@@ -376,7 +389,10 @@ function SocialAccountsEditor({ client, onChanged }: { client: Client; onChanged
   const [err, setErr] = useState("");
   const [okMsg, setOkMsg] = useState("");
 
-  function reset(p: "instagram" | "facebook") {
+  const needsId = platform === "instagram" || platform === "facebook";
+  const total = client.social.length + client.publishing.length;
+
+  function reset(p: AnyPlatform) {
     setPlatform(p);
     setExternalId("");
     setHandle("");
@@ -416,11 +432,18 @@ function SocialAccountsEditor({ client, onChanged }: { client: Client; onChanged
   async function add() {
     setBusy("add");
     setErr("");
-    const res = await fetch("/api/social/accounts", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ clientId: client.id, platform, externalId, handle }),
-    })
+    const res = await (needsId
+      ? fetch("/api/social/accounts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ clientId: client.id, platform, externalId, handle }),
+        })
+      : fetch("/api/scheduler/profiles", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ clientId: client.id, platform, handle }),
+        })
+    )
       .then((r) => r.json())
       .catch(() => ({ ok: false, error: "Request failed" }));
     setBusy("");
@@ -429,179 +452,128 @@ function SocialAccountsEditor({ client, onChanged }: { client: Client; onChanged
     onChanged();
   }
 
-  async function unlink(a: SocialAccount) {
+  async function unlinkSocial(a: SocialAccount) {
     if (!window.confirm(`Unlink ${a.handle || a.external_id} from ${client.name}? Its stored history is kept.`)) return;
     await fetch(`/api/social/accounts/${a.id}`, { method: "DELETE" });
     onChanged();
   }
 
-  return (
-    <div className="rounded-lg border border-white/[0.07] bg-[#0b0e14]/60 p-3">
-      <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-        Instagram &amp; Facebook accounts for {client.name} ({client.social.length}) — also shown on the Social Media dashboard
-      </div>
-
-      {client.social.length > 0 && (
-        <div className="mb-3 flex flex-wrap gap-2">
-          {client.social.map((a) => (
-            <span key={a.id} className="inline-flex items-center gap-2 rounded-md bg-white/[0.05] px-2 py-1 text-xs">
-              <AccountChip a={a} />
-              <span className="font-mono text-[9px] text-slate-600">{a.external_id}</span>
-              <button onClick={() => unlink(a)} title="Unlink" className="text-slate-500 hover:text-rose-300">
-                <X size={11} />
-              </button>
-            </span>
-          ))}
-        </div>
-      )}
-
-      <div className="flex flex-wrap items-end gap-2">
-        <div className="w-[130px]">
-          <div className="mb-1 text-[10px] uppercase tracking-wider text-slate-500">Platform</div>
-          <CustomSelect
-            size="sm"
-            value={platform}
-            onChange={(v) => reset(v as "instagram" | "facebook")}
-            options={[
-              { value: "instagram", label: "Instagram" },
-              { value: "facebook", label: "Facebook Page" },
-            ]}
-          />
-        </div>
-        <div className="min-w-[200px] flex-1">
-          <div className="mb-1 text-[10px] uppercase tracking-wider text-slate-500">{platform === "instagram" ? "Instagram account ID" : "Facebook Page ID"}</div>
-          <input
-            value={externalId}
-            onChange={(e) => {
-              setExternalId(e.target.value);
-              setOkMsg("");
-            }}
-            placeholder={platform === "instagram" ? "e.g. 17841435173358588" : "e.g. 915005651703515"}
-            className="w-full rounded-md border border-white/[0.12] bg-[#0b0e14] px-2 py-1.5 text-xs text-slate-100 placeholder:text-slate-600 focus:border-cyan-500/50 focus:outline-none"
-          />
-        </div>
-        <div className="min-w-[160px]">
-          <div className="mb-1 text-[10px] uppercase tracking-wider text-slate-500">{platform === "instagram" ? "Handle" : "Page name"}</div>
-          <input
-            value={handle}
-            onChange={(e) => setHandle(e.target.value)}
-            placeholder="filled by Check"
-            className="w-full rounded-md border border-white/[0.12] bg-[#0b0e14] px-2 py-1.5 text-xs text-slate-100 placeholder:text-slate-600 focus:border-cyan-500/50 focus:outline-none"
-          />
-        </div>
-        <button
-          onClick={check}
-          disabled={!externalId.trim() || busy !== ""}
-          className="rounded-md bg-white/[0.06] px-3 py-1.5 text-xs font-semibold text-slate-300 hover:bg-white/[0.1] disabled:opacity-40"
-        >
-          {busy === "check" ? "Checking…" : "Check ID"}
-        </button>
-        <button
-          onClick={add}
-          disabled={!externalId.trim() || busy !== ""}
-          className="flex items-center gap-1 rounded-md bg-emerald-500/15 px-3 py-1.5 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/25 disabled:opacity-40"
-        >
-          {busy === "add" ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />} Add
-        </button>
-      </div>
-
-      <div className="mt-2 flex flex-wrap items-center gap-3">
-        <button onClick={find} disabled={busy !== ""} className="text-[11px] font-semibold text-cyan-300 hover:underline disabled:opacity-50">
-          {busy === "find" ? "Searching…" : platform === "instagram" ? "Find Instagram accounts" : "Find Facebook Pages"}
-        </button>
-        {found && found.length > 0 && (
-          <div className="w-[300px]">
-            <CustomSelect
-              size="sm"
-              value=""
-              placeholder="Pick one…"
-              onChange={(id) => {
-                const f = found.find((x) => x.id === id);
-                if (!f) return;
-                setExternalId(f.id);
-                setHandle(f.label.replace(/ \(.*\)$/, ""));
-                setOkMsg("");
-              }}
-              options={found.map((f) => ({ value: f.id, label: f.label }))}
-            />
-          </div>
-        )}
-        {found && found.length === 0 && <span className="text-[11px] text-amber-300">None listed — paste the ID from Business Settings and press Check ID.</span>}
-      </div>
-
-      {okMsg && <div className="mt-2 text-[11px] text-emerald-300">✓ {okMsg}</div>}
-      {err && <div className="mt-2 text-[11px] text-rose-300">{err}</div>}
-    </div>
-  );
-}
-
-// Threads, X, TikTok and YouTube accounts for one client. These are only used to
-// schedule posts (Scheduler tab); nothing is pulled from them into the Dashboard.
-function PublishProfilesEditor({ client, onChanged }: { client: Client; onChanged: () => void }) {
-  const [platform, setPlatform] = useState<Platform>("threads");
-  const [handle, setHandle] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState("");
-
-  async function add() {
-    if (!handle.trim()) return;
-    setBusy(true);
-    setErr("");
-    const res = await fetch("/api/scheduler/profiles", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ clientId: client.id, platform, handle }),
-    }).then((r) => r.json()).catch(() => ({ ok: false, error: "Network error" }));
-    setBusy(false);
-    if (!res.ok) return setErr(res.error || "Could not add the account.");
-    setHandle("");
-    onChanged();
-  }
-
-  async function remove(a: PublishProfile) {
-    if (!window.confirm(`Remove ${a.handle ?? "this account"} from ${client.name}? Scheduled posts already queued for it stay as they are.`)) return;
+  async function removeProfile(a: PublishProfile) {
+    if (!window.confirm(`Remove ${a.handle ?? "this account"} from ${client.name}? Posts already queued for it stay as they are.`)) return;
     await fetch(`/api/scheduler/profiles?id=${a.id}`, { method: "DELETE" });
     onChanged();
   }
 
+  const canAdd = needsId ? externalId.trim() !== "" : handle.trim() !== "";
+
   return (
-    <div className="mt-3 rounded-lg border border-white/[0.07] bg-[#0b0e14]/60 p-3">
-      <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-        Publishing accounts for {client.name} — Threads, X, TikTok, YouTube Shorts ({client.publishing.length})
+    <div className="max-w-[560px] rounded-lg border border-white/[0.07] bg-[#0b0e14]/60 p-3.5">
+      <div className="mb-2.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+        Accounts for {client.name} ({total})
       </div>
 
-      {client.publishing.length > 0 && (
-        <div className="mb-3 flex flex-wrap gap-2">
+      {/* Everything linked, one per line */}
+      {total === 0 ? (
+        <div className="mb-3 text-xs text-slate-600">Nothing linked yet.</div>
+      ) : (
+        <div className="mb-4 flex flex-col divide-y divide-white/[0.05] rounded-md bg-white/[0.03]">
+          {client.social.map((a) => (
+            <div key={a.id} className="flex items-center gap-3 px-3 py-2 text-xs">
+              <AccountChip a={a} />
+              <span className="font-mono text-[9px] text-slate-600">{a.external_id}</span>
+              <span className="ml-auto rounded-full bg-emerald-500/10 px-2 py-0.5 text-[9px] font-semibold text-emerald-300" title="Its numbers appear on the Social Media dashboard, and you can post to it from the Scheduler">Dashboard + posting</span>
+              <button onClick={() => unlinkSocial(a)} title="Unlink" className="text-slate-500 hover:text-rose-300"><X size={12} /></button>
+            </div>
+          ))}
           {client.publishing.map((a) => (
-            <span key={a.id} className="inline-flex items-center gap-2 rounded-md bg-white/[0.05] px-2 py-1 text-xs">
+            <div key={a.id} className="flex items-center gap-3 px-3 py-2 text-xs">
               <ProfileChip a={a} />
-              <button onClick={() => remove(a)} title="Remove" className="text-slate-500 hover:text-rose-300"><X size={11} /></button>
-            </span>
+              <span className="ml-auto rounded-full bg-white/[0.06] px-2 py-0.5 text-[9px] font-semibold text-slate-400" title="Used only for scheduled posting">Posting only</span>
+              <button onClick={() => removeProfile(a)} title="Remove" className="text-slate-500 hover:text-rose-300"><X size={12} /></button>
+            </div>
           ))}
         </div>
       )}
 
-      <div className="flex flex-wrap items-end gap-2">
-        <div className="w-[150px]">
-          <div className="mb-1 text-[10px] uppercase tracking-wider text-slate-500">Platform</div>
-          <CustomSelect size="sm" value={platform} onChange={(v) => setPlatform(v as Platform)} options={PUBLISH_ONLY_PLATFORMS.map((p) => ({ value: p, label: PLATFORM_LABEL[p] }))} />
-        </div>
+      {/* Add one */}
+      <div className="flex flex-col gap-2.5 border-t border-white/[0.06] pt-3.5">
+        <div className="text-[11px] font-semibold text-slate-300">Add an account</div>
+
         <div>
-          <div className="mb-1 text-[10px] uppercase tracking-wider text-slate-500">Username / channel</div>
-          <input
-            value={handle}
-            onChange={(e) => setHandle(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && add()}
-            placeholder="@username"
-            className="w-[220px] rounded-lg border border-white/[0.12] bg-[#0b0e14] px-2.5 py-1.5 text-[11px] text-slate-100 placeholder:text-slate-600 focus:border-cyan-500/50 focus:outline-none"
-          />
+          <div className={fieldLabel}>Platform</div>
+          <CustomSelect size="sm" value={platform} onChange={(v) => reset(v as AnyPlatform)} options={PLATFORM_OPTIONS} />
         </div>
-        <button onClick={add} disabled={busy || !handle.trim()} className="rounded-lg bg-cyan-500/15 px-3 py-1.5 text-[11px] font-semibold text-cyan-300 hover:bg-cyan-500/25 disabled:opacity-50">
-          {busy ? "Adding…" : "Add account"}
-        </button>
+
+        {needsId ? (
+          <>
+            <div className="flex flex-wrap items-center gap-3">
+              <button onClick={find} disabled={busy !== ""} className="text-[11px] font-semibold text-cyan-300 hover:underline disabled:opacity-50">
+                {busy === "find" ? "Searching…" : platform === "instagram" ? "Find Instagram accounts" : "Find Facebook Pages"}
+              </button>
+              {found && found.length === 0 && <span className="text-[11px] text-amber-300">None listed — paste the ID from Business Settings and press Check ID.</span>}
+            </div>
+            {found && found.length > 0 && (
+              <div>
+                <div className={fieldLabel}>Pick one</div>
+                <CustomSelect
+                  size="sm"
+                  value=""
+                  placeholder="Choose from the list…"
+                  onChange={(id) => {
+                    const f = found.find((x) => x.id === id);
+                    if (!f) return;
+                    setExternalId(f.id);
+                    setHandle(f.label.replace(/ \(.*\)$/, ""));
+                    setOkMsg("");
+                  }}
+                  options={found.map((f) => ({ value: f.id, label: f.label }))}
+                />
+              </div>
+            )}
+            <div>
+              <div className={fieldLabel}>{platform === "instagram" ? "Instagram account ID" : "Facebook Page ID"}</div>
+              <input
+                value={externalId}
+                onChange={(e) => { setExternalId(e.target.value); setOkMsg(""); }}
+                placeholder={platform === "instagram" ? "e.g. 17841435173358588" : "e.g. 915005651703515"}
+                className={inputCls}
+              />
+            </div>
+            <div>
+              <div className={fieldLabel}>{platform === "instagram" ? "Handle" : "Page name"}</div>
+              <input value={handle} onChange={(e) => setHandle(e.target.value)} placeholder="filled by Check ID" className={inputCls} />
+            </div>
+          </>
+        ) : (
+          <div>
+            <div className={fieldLabel}>{platform === "youtube" ? "Channel name" : "Username"}</div>
+            <input
+              value={handle}
+              onChange={(e) => setHandle(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && canAdd && add()}
+              placeholder="@username"
+              className={inputCls}
+            />
+            <p className="mt-1.5 text-[10px] leading-relaxed text-slate-600">
+              Just a label so you can pick the right account when scheduling. The real login for {PLATFORM_LABEL[platform as Platform]} is connected once in Make.com.
+            </p>
+          </div>
+        )}
+
+        <div className="flex items-center gap-2">
+          {needsId && (
+            <button onClick={check} disabled={!externalId.trim() || busy !== ""} className="rounded-md bg-white/[0.06] px-3 py-1.5 text-xs font-semibold text-slate-300 hover:bg-white/[0.1] disabled:opacity-40">
+              {busy === "check" ? "Checking…" : "Check ID"}
+            </button>
+          )}
+          <button onClick={add} disabled={!canAdd || busy !== ""} className="flex items-center gap-1 rounded-md bg-emerald-500/15 px-4 py-1.5 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/25 disabled:opacity-40">
+            {busy === "add" ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />} Add account
+          </button>
+        </div>
+
+        {okMsg && <div className="text-[11px] text-emerald-300">✓ {okMsg}</div>}
+        {err && <div className="text-[11px] text-rose-300">{err}</div>}
       </div>
-      <p className="mt-2 text-[10px] text-slate-600">The name is just a label so you can pick the right account when scheduling. The actual login for each platform is connected once in Make.com.</p>
-      {err && <div className="mt-2 text-[11px] text-rose-300">{err}</div>}
     </div>
   );
 }
