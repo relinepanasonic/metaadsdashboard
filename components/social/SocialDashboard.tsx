@@ -6,8 +6,8 @@ import { Users, TrendingUp, Eye, UserCheck, MousePointerClick, RefreshCw, Loader
 import { ResponsiveContainer, ComposedChart, Area, LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from "recharts";
 import CustomSelect from "@/components/CustomSelect";
 import KpiCard from "@/components/KpiCard";
-import PostInsightsModal, { VerdictChip, type InsightPost } from "@/components/social/PostInsightsModal";
-import { judgeReel, type PostMetrics } from "@/lib/social/reelBadges";
+import PostInsightsModal, { type InsightPost } from "@/components/social/PostInsightsModal";
+import { judgeReel, type Grade, type PostMetrics, type Verdict } from "@/lib/social/reelBadges";
 import { compactNumber, formatNumber } from "@/lib/format";
 
 interface Snapshot {
@@ -714,7 +714,7 @@ export default function SocialDashboard({ canManage = true }: { canManage?: bool
                         </span>
                         {!ins && (
                           <div className="mt-0.5 text-[10px] text-amber-400/80">
-                            {a.platform === "instagram" ? "Insights blocked — token needs instagram_manage_insights" : "Followers only — Facebook reach isn't connected"}
+                            {a.platform === "instagram" ? "Insights blocked — Meta does not let this token read this account (assign it to the token user in Business Settings)" : "Followers only — Facebook reach isn't connected"}
                           </div>
                         )}
                       </td>
@@ -731,18 +731,33 @@ export default function SocialDashboard({ canManage = true }: { canManage?: bool
           </div>
 
           <div className="glass-panel overflow-x-auto p-4 sm:p-5">
-            <h3 className="mb-3 text-sm font-semibold text-slate-100">Top posts ({win.label})</h3>
-            <table className="w-full min-w-[720px] border-collapse text-xs">
+            <div className="mb-4 flex flex-wrap items-end justify-between gap-x-6 gap-y-1">
+              <h3 className="text-sm font-semibold text-slate-100">Top posts ({win.label})</h3>
+              <p className="text-[11px] text-slate-500">
+                <b className="font-semibold text-slate-400">Hook</b> first 3 seconds · <b className="font-semibold text-slate-400">Value</b> watch time &amp; saves · <b className="font-semibold text-slate-400">CTA</b> comments, shares, reposts · click a row for the full breakdown
+              </p>
+            </div>
+            <table className="w-full min-w-[880px] table-fixed border-collapse text-xs">
+              <colgroup>
+                <col style={{ width: 64 }} />
+                <col />
+                <col style={{ width: 92 }} />
+                <col style={{ width: 66 }} />
+                <col style={{ width: 66 }} />
+                <col style={{ width: 66 }} />
+                <col style={{ width: 64 }} />
+                <col style={{ width: 88 }} />
+              </colgroup>
               <thead>
-                <tr className="text-left text-[10px] uppercase tracking-wider text-slate-500">
-                  <th className="px-3 py-2.5 font-semibold">Cover</th>
-                  <th className="px-3 py-2.5 font-semibold">Account</th>
-                  <th className="px-3 py-2.5 font-semibold">Post</th>
-                  <th className="px-3 py-2.5 font-semibold">Type</th>
-                  <th className="px-3 py-2.5 font-semibold">Signals</th>
-                  <th className="px-3 py-2.5 font-semibold">Date</th>
-                  <th className="px-3 py-2.5 text-right font-semibold">Likes</th>
-                  <th className="px-3 py-2.5 text-right font-semibold">Comments</th>
+                <tr className="border-b border-white/[0.08] text-[10px] uppercase tracking-wider text-slate-500">
+                  <th className="px-2 pb-2.5 text-left font-semibold"></th>
+                  <th className="px-2 pb-2.5 text-left font-semibold">Post</th>
+                  <th className="px-2 pb-2.5 text-left font-semibold">Type</th>
+                  <th className="px-1 pb-2.5 text-center font-semibold">Hook</th>
+                  <th className="px-1 pb-2.5 text-center font-semibold">Value</th>
+                  <th className="px-1 pb-2.5 text-center font-semibold">CTA</th>
+                  <th className="px-2 pb-2.5 text-right font-semibold">Likes</th>
+                  <th className="px-2 pb-2.5 text-right font-semibold">Comments</th>
                 </tr>
               </thead>
               <tbody>
@@ -751,29 +766,33 @@ export default function SocialDashboard({ canManage = true }: { canManage?: bool
                     <td colSpan={8} className="px-3 py-6 text-center text-slate-500">No posts stored for this range. Posts need the Instagram permission described above.</td>
                   </tr>
                 ) : (
-                  topPosts.map((p) => (
-                    <tr key={p.media_id} onClick={() => setOpenPost(p as InsightPost & { accountId: string })} className="cursor-pointer border-t border-white/[0.05] hover:bg-white/[0.04]" title="Click for full insights">
-                      <td className="px-3 py-2.5">
-                        <PostCover post={p} />
-                      </td>
-                      <td className="px-3 py-2.5 text-slate-400">{p.account}</td>
-                      <td className="max-w-[340px] px-3 py-2.5">
-                        {p.permalink ? (
-                          <a href={p.permalink} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="inline-flex items-center gap-1 text-slate-100 hover:text-cyan-300">
-                            <span className="truncate">{(p.caption ?? "(no caption)").slice(0, 80)}</span>
-                            <ExternalLink size={10} className="shrink-0" />
-                          </a>
-                        ) : (
-                          <span className="text-slate-100">{(p.caption ?? "(no caption)").slice(0, 80)}</span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2.5 text-slate-400">{p.media_type?.replace("_", " ").toLowerCase() ?? dash}</td>
-                      <td className="px-3 py-2.5"><PostSignals post={p as PostMetrics} /></td>
-                      <td className="px-3 py-2.5 text-slate-400">{p.posted_at?.slice(0, 10) ?? dash}</td>
-                      <td className="px-3 py-2.5 text-right text-slate-300">{p.like_count != null ? formatNumber(p.like_count) : dash}</td>
-                      <td className="px-3 py-2.5 text-right text-slate-300">{p.comments_count != null ? formatNumber(p.comments_count) : dash}</td>
-                    </tr>
-                  ))
+                  topPosts.map((p) => {
+                    const v = judgeReel(p as PostMetrics);
+                    return (
+                      <tr key={p.media_id} onClick={() => setOpenPost(p as InsightPost & { accountId: string })} className="cursor-pointer border-b border-white/[0.05] transition-colors last:border-0 hover:bg-white/[0.04]" title="Click for full insights">
+                        <td className="px-2 py-3 align-middle"><PostCover post={p} /></td>
+                        <td className="px-2 py-3 align-middle">
+                          <div className="line-clamp-2 text-[13px] font-medium leading-snug text-slate-100">{p.caption?.trim() || "(no caption)"}</div>
+                          <div className="mt-1 flex items-center gap-1.5 text-[11px] text-slate-500">
+                            <span className="truncate">{p.account}</span>
+                            <span>·</span>
+                            <span className="shrink-0">{p.posted_at?.slice(0, 10) ?? dash}</span>
+                            {p.permalink && (
+                              <a href={p.permalink} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="ml-1 shrink-0 text-slate-500 hover:text-cyan-300" title="Open on Instagram">
+                                <ExternalLink size={11} />
+                              </a>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-2 py-3 align-middle"><TypePill post={p} /></td>
+                        <td className="px-1 py-3 text-center align-middle"><SignalCell v={v.hook} reel={v.applicable} early={v.tooEarly} /></td>
+                        <td className="px-1 py-3 text-center align-middle"><SignalCell v={v.value} reel={v.applicable} early={v.tooEarly} /></td>
+                        <td className="px-1 py-3 text-center align-middle"><SignalCell v={v.cta} reel={v.applicable} early={v.tooEarly} /></td>
+                        <td className="px-2 py-3 text-right align-middle tabular-nums text-slate-200">{p.like_count != null ? formatNumber(p.like_count) : dash}</td>
+                        <td className="px-2 py-3 text-right align-middle tabular-nums text-slate-200">{p.comments_count != null ? formatNumber(p.comments_count) : dash}</td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -792,18 +811,30 @@ export default function SocialDashboard({ canManage = true }: { canManage?: bool
   );
 }
 
-// Hook / Value / CTA verdicts for a Reel; only clear good/bad calls become chips.
-function PostSignals({ post }: { post: PostMetrics }) {
-  const v = judgeReel(post);
-  if (!v.applicable) return <span className="text-slate-700">—</span>;
-  if (v.tooEarly) return <span className="text-[10px] text-slate-600">too early</span>;
-  const chips = [v.hook, v.value, v.cta].filter((x) => x.grade === "good" || x.grade === "bad");
-  if (chips.length === 0) return <span className="text-[10px] text-slate-600">{v.hook.grade === "unknown" ? "run Sync" : "average"}</span>;
+// One verdict as a fixed-width pill so the three signal columns line up.
+const SIGNAL_STYLE: Record<Grade, string> = {
+  good: "bg-emerald-500/15 text-emerald-300 ring-emerald-400/30",
+  bad: "bg-rose-500/15 text-rose-300 ring-rose-400/30",
+  ok: "bg-white/[0.05] text-slate-400 ring-white/10",
+  unknown: "",
+};
+function SignalCell({ v, reel, early }: { v: Verdict; reel: boolean; early: boolean }) {
+  if (!reel) return <span className="text-slate-700" title="Signals apply to Reels">—</span>;
+  if (early) return <span className="text-slate-600" title="Needs 50+ reach before it can be judged">…</span>;
+  if (v.grade === "unknown") return <span className="text-slate-700" title="No data yet — press Sync">—</span>;
+  const text = v.grade === "good" ? "Good" : v.grade === "bad" ? "Bad" : "OK";
   return (
-    <div className="flex flex-wrap gap-1">
-      {chips.map((c) => <VerdictChip key={c.label} v={c} />)}
-    </div>
+    <span className={`inline-block min-w-[46px] rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset ${SIGNAL_STYLE[v.grade]}`} title={`${v.label} — ${v.metric}`}>
+      {text}
+    </span>
   );
+}
+
+function TypePill({ post }: { post: Post }) {
+  const isFb = post.media_type === "facebook post";
+  const label = isFb ? "Post" : post.media_product_type === "REELS" || post.media_type === "VIDEO" ? "Reel" : post.media_type === "CAROUSEL_ALBUM" ? "Carousel" : post.media_type === "IMAGE" ? "Photo" : "Post";
+  const cls = label === "Reel" ? "bg-cyan-500/10 text-cyan-300 ring-cyan-400/25" : "bg-white/[0.05] text-slate-400 ring-white/10";
+  return <span className={`inline-block rounded-md px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset ${cls}`}>{label}</span>;
 }
 
 // Instagram's thumbnail/media CDN links expire after about a day, so a link
