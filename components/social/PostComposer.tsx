@@ -40,21 +40,23 @@ function wibParts(iso: string | null): { date: string; time: string } {
 const inputCls = "w-full rounded-lg border border-white/[0.12] bg-[#0b0e14] px-3 py-2 text-xs text-slate-100 placeholder:text-slate-600 focus:border-cyan-500/50 focus:outline-none [color-scheme:dark]";
 const labelCls = "mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-slate-500";
 
-export default function PostComposer({ options, post, onClose, onSaved, onOptionsChanged }: {
+export default function PostComposer({ options, post, duplicate = false, onClose, onSaved, onOptionsChanged }: {
   options: SchedOptions;
   post: EditablePost | null;
+  duplicate?: boolean; // start a NEW post from an existing one: same caption / media, no accounts, new time
   onClose: () => void;
   onSaved: () => void;
   onOptionsChanged: () => void;
 }) {
-  const init = wibParts(post?.scheduledAt ?? null);
+  const editing = Boolean(post) && !duplicate;
+  const init = wibParts(editing ? post!.scheduledAt : null);
   const [clientId, setClientId] = useState(post?.clientId ?? options.clients[0]?.id ?? "");
   const [contentType, setContentType] = useState<ContentType>(post?.contentType ?? "reel");
   const [media, setMedia] = useState<MediaItem[]>(post?.media ?? []);
   const [caption, setCaption] = useState(post?.caption ?? "");
   const [date, setDate] = useState(init.date);
   const [time, setTime] = useState(init.time);
-  const [picked, setPicked] = useState<Set<string>>(() => new Set((post?.targets ?? []).map((t) => `${t.platform}|${t.handle ?? ""}`)));
+  const [picked, setPicked] = useState<Set<string>>(() => new Set(duplicate ? [] : (post?.targets ?? []).map((t) => `${t.platform}|${t.handle ?? ""}`)));
   const [uploading, setUploading] = useState(0);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -162,8 +164,8 @@ export default function PostComposer({ options, post, onClose, onSaved, onOption
       if (problem) return setError(problem);
     }
     setSaving(true);
-    const res = await fetch(post ? `/api/scheduler/posts/${post.id}` : "/api/scheduler/posts", {
-      method: post ? "PATCH" : "POST",
+    const res = await fetch(editing ? `/api/scheduler/posts/${post!.id}` : "/api/scheduler/posts", {
+      method: editing ? "PATCH" : "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ clientId, caption, contentType, media, scheduledAt: scheduledAt.toISOString(), status, targets }),
     }).then((r) => r.json()).catch(() => ({ ok: false, error: "Network error" }));
@@ -178,7 +180,12 @@ export default function PostComposer({ options, post, onClose, onSaved, onOption
     <div className="fixed inset-0 z-[9998] flex items-start justify-center overflow-y-auto bg-black/70 p-3 backdrop-blur-sm sm:p-8" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="relative w-full max-w-[760px] rounded-2xl border border-white/[0.12] bg-[#0e1420] p-4 shadow-2xl sm:p-6" role="dialog" aria-modal="true">
         <button onClick={onClose} className="absolute right-3 top-3 rounded-lg p-1.5 text-slate-400 hover:bg-white/[0.06] hover:text-white" aria-label="Close"><X size={18} /></button>
-        <h2 className="text-base font-black text-white">{post ? "Edit scheduled post" : "New scheduled post"}</h2>
+        <h2 className="text-base font-black text-white">{editing ? "Edit scheduled post" : duplicate ? "Duplicate post" : "New scheduled post"}</h2>
+        {duplicate && (
+          <p className="mt-2 rounded-lg bg-cyan-500/10 px-3 py-2 text-[11px] text-cyan-200">
+            Copied from an existing post: same caption and media. Pick the accounts you want to post it to, and set the time. The original is not changed.
+          </p>
+        )}
 
         {/* Brand + accounts */}
         <div className="mt-5 grid gap-4 sm:grid-cols-2">
@@ -302,7 +309,7 @@ export default function PostComposer({ options, post, onClose, onSaved, onOption
           <button type="button" onClick={onClose} className="rounded-lg px-4 py-2 text-xs font-semibold text-slate-400 hover:text-slate-200">Cancel</button>
           <button type="button" onClick={() => save("draft")} disabled={saving || uploading > 0} className="rounded-lg bg-white/[0.06] px-4 py-2 text-xs font-semibold text-slate-200 hover:bg-white/[0.1] disabled:opacity-50">Save as draft</button>
           <button type="button" onClick={() => save("scheduled")} disabled={saving || uploading > 0} className="rounded-lg bg-cyan-500/20 px-5 py-2 text-xs font-bold text-cyan-200 hover:bg-cyan-500/30 disabled:opacity-50" style={{ boxShadow: "inset 0 0 0 1px rgba(34,211,238,0.4)" }}>
-            {saving ? "Saving…" : post ? "Save & schedule" : "Schedule post"}
+            {saving ? "Saving…" : editing ? "Save & schedule" : "Schedule post"}
           </button>
         </div>
       </div>

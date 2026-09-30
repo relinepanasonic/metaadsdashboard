@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, CalendarClock, CheckCircle2, Clock, Film, ImageIcon, Loader2, Pencil, Plug, Plus, RotateCcw, Send, Trash2, XCircle } from "lucide-react";
+import { AlertTriangle, CalendarClock, CheckCircle2, Clock, Copy, Film, ImageIcon, Loader2, Pencil, Plug, Plus, RotateCcw, Send, Trash2, XCircle } from "lucide-react";
 import PostComposer, { type EditablePost, type SchedOptions } from "./PostComposer";
 import MakeSetup from "./MakeSetup";
 import { CONTENT_LABEL, PLATFORM_LABEL, postState, type ContentType, type MediaItem, type Platform, type PostState, type TargetStatus } from "@/lib/services/scheduler";
@@ -73,7 +73,7 @@ export default function Scheduler() {
   const [error, setError] = useState("");
   const [needsMigration, setNeedsMigration] = useState(false);
   const [filter, setFilter] = useState<Filter>("upcoming");
-  const [composer, setComposer] = useState<{ post: EditablePost | null } | null>(null);
+  const [composer, setComposer] = useState<{ post: EditablePost | null; duplicate?: boolean } | null>(null);
   const [showSetup, setShowSetup] = useState(false);
   const [busy, setBusy] = useState("");
 
@@ -165,6 +165,10 @@ export default function Scheduler() {
 
   const lastPollAge = make.lastPoll ? (Date.now() - Date.parse(make.lastPoll)) / 60_000 : null;
   const makeOk = lastPollAge != null && lastPollAge <= 130;
+
+  function duplicate(p: Post) {
+    setComposer({ duplicate: true, post: { id: p.id, clientId: p.clientId, caption: p.caption, contentType: p.contentType, media: p.media, scheduledAt: p.scheduledAt, status: p.status, targets: [] } });
+  }
 
   function edit(p: Post) {
     setComposer({ post: { id: p.id, clientId: p.clientId, caption: p.caption, contentType: p.contentType, media: p.media, scheduledAt: p.scheduledAt, status: p.status, targets: p.targets } });
@@ -292,6 +296,7 @@ export default function Scheduler() {
                           {!locked && state !== "cancelled" && <button onClick={() => edit(p)} className="rounded-lg p-2 text-slate-400 hover:bg-white/[0.06] hover:text-slate-100" title="Edit"><Pencil size={14} /></button>}
                           {state === "scheduled" && <button onClick={() => act(p.id, { action: "cancel" }, "Cancel this scheduled post? It will not be published.")} className="rounded-lg px-2.5 py-1.5 text-[11px] font-semibold text-slate-400 hover:bg-white/[0.06] hover:text-amber-300">Cancel</button>}
                           {state === "cancelled" && <button onClick={() => act(p.id, { action: "schedule" })} className="rounded-lg px-2.5 py-1.5 text-[11px] font-semibold text-slate-400 hover:bg-white/[0.06] hover:text-cyan-300">Reschedule</button>}
+                          <button onClick={() => duplicate(p)} className="rounded-lg p-2 text-slate-400 hover:bg-white/[0.06] hover:text-cyan-300" title="Duplicate — post this to other accounts"><Copy size={14} /></button>
                           <button onClick={() => remove(p.id)} className="rounded-lg p-2 text-slate-500 hover:bg-rose-500/10 hover:text-rose-300" title="Delete"><Trash2 size={14} /></button>
                         </>
                       )}
@@ -308,6 +313,7 @@ export default function Scheduler() {
         <PostComposer
           options={options}
           post={composer.post}
+          duplicate={composer.duplicate}
           onClose={() => setComposer(null)}
           onOptionsChanged={loadOptions}
           onSaved={() => { setComposer(null); loadPosts(); }}

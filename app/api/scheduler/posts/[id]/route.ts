@@ -98,7 +98,14 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
 
   // Free the storage space — unless it already went out, where the file is the record of what was posted.
   if (post && !(targets ?? []).some((t) => t.status === "published")) {
-    const paths = ((post.media ?? []) as MediaItem[]).map((m) => m.url.split("/social-media/")[1]).filter(Boolean).map((p) => decodeURIComponent(p));
+    // A duplicated post shares its files with the original, so only remove files no other post uses.
+    const { data: others } = await db.from("scheduled_posts").select("media");
+    const stillUsed = new Set(((others ?? []) as { media: MediaItem[] | null }[]).flatMap((o) => (o.media ?? []).map((m) => m.url)));
+    const paths = ((post.media ?? []) as MediaItem[])
+      .filter((m) => !stillUsed.has(m.url))
+      .map((m) => m.url.split("/social-media/")[1])
+      .filter(Boolean)
+      .map((p) => decodeURIComponent(p));
     if (paths.length > 0) await db.storage.from("social-media").remove(paths).catch(() => null);
   }
   return NextResponse.json({ ok: true });
