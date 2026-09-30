@@ -25,9 +25,20 @@ export async function POST(req: NextRequest) {
   } else if (raw) {
     body = Object.fromEntries(new URLSearchParams(raw)) as Body;
   }
-  for (const k of ["targetId", "status", "url", "platformPostId", "error"] as const) {
-    if (!body[k]) body[k] = req.nextUrl.searchParams.get(k) ?? undefined;
+  // Field names are matched ignoring capitalisation ("targetID" == "targetId"): a typo in Make's
+  // field list must not leave a published post stuck.
+  const rawKeys = [...Object.keys(body), ...req.nextUrl.searchParams.keys()];
+  const merged = new Map<string, string>();
+  for (const [k, v] of [...Object.entries(body), ...req.nextUrl.searchParams.entries()]) {
+    if (typeof v === "string" && v !== "" && !merged.has(k.toLowerCase())) merged.set(k.toLowerCase(), v);
   }
+  body = {
+    targetId: merged.get("targetid"),
+    status: merged.get("status"),
+    url: merged.get("url"),
+    platformPostId: merged.get("platformpostid"),
+    error: merged.get("error"),
+  };
   const targetId = typeof body.targetId === "string" ? body.targetId.trim() : "";
   const status = typeof body.status === "string" ? body.status.trim().toLowerCase() : "";
 
@@ -35,7 +46,7 @@ export async function POST(req: NextRequest) {
     await db!.from("scheduler_state").upsert(
       {
         key: "last_result_reject",
-        value: JSON.stringify({ at: new Date().toISOString(), message, contentType: req.headers.get("content-type"), bodyLength: raw.length, fields: Object.keys(body), statusValue: status || null, targetIdLength: targetId.length }),
+        value: JSON.stringify({ at: new Date().toISOString(), message, contentType: req.headers.get("content-type"), bodyLength: raw.length, fields: rawKeys, statusValue: status || null, targetIdLength: targetId.length }),
         updated_at: new Date().toISOString(),
       },
       { onConflict: "key" }
