@@ -40,8 +40,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: message });
   };
 
-  if (target.platform !== "instagram" || !target.external_id || !post) return fail("This job is not an Instagram post with a known account.");
-  if (post.content_type !== "carousel") return fail("This job is not a carousel.");
+  // This endpoint only handles Instagram carousels. If Make sends it anything else (a route
+  // without a filter), leave the job completely alone so the right route can publish it.
+  if (target.platform !== "instagram" || post?.content_type !== "carousel") {
+    return NextResponse.json({ ok: true, ignored: true, note: "Not an Instagram carousel — nothing done." });
+  }
+  if (!target.external_id || !post) return fail("This Instagram post has no account ID.");
 
   try {
     const result = await publishInstagramCarousel(target.external_id, post.media ?? [], post.caption ?? "");
