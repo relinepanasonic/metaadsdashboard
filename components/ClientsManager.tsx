@@ -384,6 +384,7 @@ function AccountsEditor({ client, onChanged }: { client: Client; onChanged: () =
   const [platform, setPlatform] = useState<AnyPlatform>("instagram");
   const [externalId, setExternalId] = useState("");
   const [handle, setHandle] = useState("");
+  const [serviceId, setServiceId] = useState(""); // account id in the posting service (Zernio), for Threads / X / TikTok / YouTube
   const [found, setFound] = useState<Found[] | null>(null);
   const [busy, setBusy] = useState<"" | "find" | "check" | "add">("");
   const [err, setErr] = useState("");
@@ -396,6 +397,7 @@ function AccountsEditor({ client, onChanged }: { client: Client; onChanged: () =
     setPlatform(p);
     setExternalId("");
     setHandle("");
+    setServiceId("");
     setFound(null);
     setErr("");
     setOkMsg("");
@@ -441,7 +443,7 @@ function AccountsEditor({ client, onChanged }: { client: Client; onChanged: () =
       : fetch("/api/scheduler/profiles", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ clientId: client.id, platform, handle }),
+          body: JSON.stringify({ clientId: client.id, platform, handle, externalId: serviceId }),
         })
     )
       .then((r) => r.json())
@@ -488,6 +490,7 @@ function AccountsEditor({ client, onChanged }: { client: Client; onChanged: () =
           {client.publishing.map((a) => (
             <div key={a.id} className="flex items-center gap-3 px-3 py-2 text-xs">
               <ProfileChip a={a} />
+              {a.external_id && <span className="font-mono text-[9px] text-slate-600" title="Account ID in the posting service">{a.external_id}</span>}
               <span className="ml-auto rounded-full bg-white/[0.06] px-2 py-0.5 text-[9px] font-semibold text-slate-400" title="Used only for scheduled posting">Posting only</span>
               <button onClick={() => removeProfile(a)} title="Remove" className="text-slate-500 hover:text-rose-300"><X size={12} /></button>
             </div>
@@ -555,7 +558,12 @@ function AccountsEditor({ client, onChanged }: { client: Client; onChanged: () =
               className={inputCls}
             />
             <p className="mt-1.5 text-[10px] leading-relaxed text-slate-600">
-              Just a label so you can pick the right account when scheduling. The real login for {PLATFORM_LABEL[platform as Platform]} is connected once in Make.com.
+              A label so you can pick the right account when scheduling. The login for {PLATFORM_LABEL[platform as Platform]} is connected once in Make.com or in your posting service.
+            </p>
+            <div className={`${fieldLabel} mt-3`}>Posting-service account ID (optional)</div>
+            <input value={serviceId} onChange={(e) => setServiceId(e.target.value)} placeholder="e.g. the account ID shown in Zernio" className={inputCls} />
+            <p className="mt-1.5 text-[10px] leading-relaxed text-slate-600">
+              With a posting service such as Zernio, put the account&apos;s ID here. Make then picks the right account from the job, so one route serves every account.
             </p>
           </div>
         )}
