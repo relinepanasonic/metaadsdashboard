@@ -110,6 +110,8 @@ async function handle(req: NextRequest) {
       originalContentType: p.content_type,
       caption: p.caption,
       title: titleFromCaption(p.caption), // first line, for YouTube
+      // YouTube: the caption as the description, with #Shorts added so a vertical video under 3 minutes is treated as a Short
+      description: /#shorts\b/i.test(p.caption) ? p.caption : `${p.caption}\n\n#Shorts`.trim(),
       media,
       mediaUrl: media[0]?.url ?? null, // handy for single photo / video posts
       mediaUrls: media.map((m) => m.url),
