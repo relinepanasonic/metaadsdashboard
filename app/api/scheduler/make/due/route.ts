@@ -117,6 +117,9 @@ async function handle(req: NextRequest) {
       mediaUrls: media.map((m) => m.url),
       client: Array.isArray(rel) ? rel[0]?.name ?? null : rel?.name ?? null,
       scheduledAt: p.scheduled_at,
+      // For posting services that only publish at a scheduled time (Zernio saves a post without one as a draft):
+      // two minutes from now, in the exact format they expect, e.g. 2026-09-30T11:05:00.000Z
+      publishAt: new Date(now.getTime() + 2 * 60_000).toISOString(),
     });
   }
 
