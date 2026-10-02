@@ -50,9 +50,9 @@ function actionValue(actions: MetaAction[] | undefined, types: string[]): number
   return 0;
 }
 
-async function graph<T>(path: string, params: Record<string, string>): Promise<T> {
+async function graph<T>(path: string, params: Record<string, string>, fresh = false): Promise<T> {
   const usp = new URLSearchParams({ ...params, access_token: TOKEN! });
-  const res = await fetch(`${BASE}/${path}?${usp.toString()}`, { next: { revalidate: 120 } });
+  const res = await fetch(`${BASE}/${path}?${usp.toString()}`, fresh ? { cache: "no-store" } : { next: { revalidate: 120 } });
   if (!res.ok) {
     const body = await res.text();
     throw new Error(`Meta API ${res.status}: ${body.slice(0, 200)}`);
@@ -158,14 +158,50 @@ function dateParams(range?: DateRange): Record<string, string> {
   return { date_preset: range?.preset || "last_30d" };
 }
 
+export interface CampaignInfo {
+  id: string;
+  name: string;
+  accountId: string; // without "act_"
+  status: string; // ACTIVE | PAUSED | ARCHIVED | DELETED
+  effectiveStatus: string;
+}
+
+// One campaign, read live (never cached) — used to check who owns it before changing it.
+export async function fetchCampaignInfo(campaignId: string): Promise<CampaignInfo> {
+  if (!TOKEN) throw new Error("Meta Ads not connected — set META_ACCESS_TOKEN.");
+  const c = await graph<{ id: string; name: string; account_id: string; status: string; effective_status: string }>(
+    campaignId,
+    { fields: "name,account_id,status,effective_status" },
+    true
+  );
+  return { id: c.id, name: c.name, accountId: String(c.account_id ?? "").replace(/^act_/, ""), status: c.status, effectiveStatus: c.effective_status };
+}
+
+// Turns a campaign on (ACTIVE) or off (PAUSED). Needs the ads_management permission.
+export async function setCampaignStatus(campaignId: string, status: "ACTIVE" | "PAUSED"): Promise<void> {
+  if (!TOKEN) throw new Error("Meta Ads not connected — set META_ACCESS_TOKEN.");
+  const res = await fetch(`${BASE}/${campaignId}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ status, access_token: TOKEN }),
+    cache: "no-store",
+  });
+  const json = (await res.json().catch(() => ({}))) as { success?: boolean; error?: { message?: string; code?: number; error_user_msg?: string } };
+  if (!res.ok || json.error || json.success === false) {
+    const e = json.error;
+    throw new Error(e ? `${e.error_user_msg || e.message}${e.code ? ` (code ${e.code})` : ""}` : `Meta API ${res.status}`);
+  }
+}
+
 export async function fetchMetaCampaigns(accountId: string, range?: DateRange): Promise<CampaignTableRow[]> {
   if (!TOKEN) throw new Error("Meta Ads not connected — set META_ACCESS_TOKEN.");
 
   const [campaignsRes, insightsRes, overrides] = await Promise.all([
+    // Status must never be a couple of minutes stale: someone may have just paused a campaign here or in Meta.
     graph<{ data: CampaignObj[] }>(`act_${accountId}/campaigns`, {
       fields: "name,status,effective_status,objective,daily_budget,lifetime_budget",
       limit: "200",
-    }),
+    }, true),
     graph<{ data: InsightObj[] }>(`act_${accountId}/insights`, {
       fields: "campaign_id,spend,impressions,reach,actions",
       level: "campaign",

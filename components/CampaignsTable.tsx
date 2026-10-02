@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Search, RefreshCw, Building2, Wallet2, UserRound } from "lucide-react";
+import { Search, RefreshCw, Building2, Wallet2, UserRound, Loader2 } from "lucide-react";
 import type { MetaAccount, CampaignTableRow } from "@/lib/services/types";
 import { formatIDR, formatNumber } from "@/lib/format";
 import CustomSelect from "./CustomSelect";
@@ -26,6 +26,8 @@ export default function CampaignsTable({ mode = "admin" }: CampaignsTableProps) 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dateRange, setDateRange] = useState<DateRangeValue>({ preset: "last_30d" });
+  const [switching, setSwitching] = useState<string | null>(null); // campaign id being switched
+  const [switchError, setSwitchError] = useState<string | null>(null);
 
   const dateQuery = dateRange.since && dateRange.until
     ? `since=${dateRange.since}&until=${dateRange.until}`
@@ -78,6 +80,32 @@ export default function CampaignsTable({ mode = "admin" }: CampaignsTableProps) 
       });
     } catch {
       /* keep optimistic value; will reconcile on next load */
+    }
+  }
+
+  // Pause / resume a campaign in Meta. It spends or stops real money, so it always asks first, and the
+  // switch only moves once Meta has confirmed (nothing is shown as changed on a guess).
+  async function switchCampaign(r: CampaignTableRow) {
+    const turnOn = r.status !== "ACTIVE";
+    const question = turnOn
+      ? `Turn ON "${r.name}"?\n\nIt will start delivering and spending its budget right away.`
+      : `Turn OFF "${r.name}"?\n\nIt will stop delivering and spending.`;
+    if (!window.confirm(question)) return;
+
+    setSwitching(r.id);
+    setSwitchError(null);
+    try {
+      const res = await fetch("/api/meta/campaign-status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ campaignId: r.id, status: turnOn ? "ACTIVE" : "PAUSED" }),
+      }).then((x) => x.json());
+      if (!res.ok) throw new Error(res.error || "Could not change the campaign.");
+      setRows((prev) => prev.map((x) => (x.id === r.id ? { ...x, status: res.status, delivery: res.status === "ACTIVE" ? (res.effectiveStatus === "ACTIVE" ? "Active" : x.delivery) : "Off" } : x)));
+    } catch (e) {
+      setSwitchError(`"${r.name}": ${(e as Error).message}`);
+    } finally {
+      setSwitching(null);
     }
   }
 
@@ -203,6 +231,12 @@ export default function CampaignsTable({ mode = "admin" }: CampaignsTableProps) 
           {error}
         </div>
       )}
+      {switchError && (
+        <div className="mb-3 flex items-start justify-between gap-3 rounded-lg px-4 py-3 text-xs text-rose-300" style={{ boxShadow: "inset 0 0 0 1px rgba(251,113,133,0.35)" }}>
+          <span>{switchError}</span>
+          <button onClick={() => setSwitchError(null)} className="shrink-0 text-rose-200 hover:text-white">Dismiss</button>
+        </div>
+      )}
 
       {/* Table */}
       <div className="overflow-x-auto">
@@ -255,9 +289,29 @@ export default function CampaignsTable({ mode = "admin" }: CampaignsTableProps) 
                     <td className="whitespace-nowrap px-3 py-2.5 text-slate-400">{accountName(r.accountId)}</td>
                   )}
                   <td className="px-3 py-2.5">
-                    <span className="inline-flex items-center gap-1.5 text-slate-300">
-                      <span className={`h-1.5 w-1.5 rounded-full ${r.delivery === "Active" ? "bg-emerald-400" : "bg-slate-600"}`} />
-                      {r.delivery}
+                    <span className="inline-flex items-center gap-2.5 text-slate-300">
+                      {!isClientMode && (r.status === "ACTIVE" || r.status === "PAUSED") && (
+                        switching === r.id ? (
+                          <Loader2 size={16} className="animate-spin text-cyan-400" />
+                        ) : (
+                          <button
+                            type="button"
+                            role="switch"
+                            aria-checked={r.status === "ACTIVE"}
+                            aria-label={`${r.status === "ACTIVE" ? "Turn off" : "Turn on"} ${r.name}`}
+                            title={r.status === "ACTIVE" ? "Click to turn this campaign off" : "Click to turn this campaign on"}
+                            onClick={() => switchCampaign(r)}
+                            disabled={switching !== null}
+                            className={`relative h-[18px] w-[32px] shrink-0 rounded-full transition-colors disabled:opacity-50 ${r.status === "ACTIVE" ? "bg-emerald-500/70" : "bg-slate-600/70"}`}
+                          >
+                            <span className={`absolute top-[2px] h-[14px] w-[14px] rounded-full bg-white shadow transition-all ${r.status === "ACTIVE" ? "left-[16px]" : "left-[2px]"}`} />
+                          </button>
+                        )
+                      )}
+                      <span className="inline-flex items-center gap-1.5">
+                        <span className={`h-1.5 w-1.5 rounded-full ${r.delivery === "Active" ? "bg-emerald-400" : "bg-slate-600"}`} />
+                        {r.delivery}
+                      </span>
                     </span>
                   </td>
                   <td className="px-3 py-2.5 text-right">
