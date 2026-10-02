@@ -166,7 +166,7 @@ export default function CampaignsTable({ mode = "admin" }: CampaignsTableProps) 
     });
   }, [rows, client, search]);
 
-  const showAccountCol = !isClientMode && account === ALL_ACCOUNTS;
+  const showAccountCol = !isClientMode; // always: it is the Meta ad account the campaign really lives in
   const colSpan = showAccountCol ? 10 : 9;
 
   const totals = useMemo(() => {
@@ -245,7 +245,7 @@ export default function CampaignsTable({ mode = "admin" }: CampaignsTableProps) 
             <tr className="text-left text-[10px] uppercase tracking-wider text-slate-500">
               <th className="sticky left-0 bg-[#0e1420] px-3 py-2.5 font-semibold">Client</th>
               <th className="px-3 py-2.5 font-semibold">Campaign</th>
-              {showAccountCol && <th className="px-3 py-2.5 font-semibold">Account</th>}
+              {showAccountCol && <th className="px-3 py-2.5 font-semibold" title="The Meta ad account this campaign was created in, read from Meta">Meta ad account</th>}
               <th className="px-3 py-2.5 font-semibold">Delivery</th>
               <th className="px-3 py-2.5 text-right font-semibold">Results</th>
               <th className="px-3 py-2.5 text-right font-semibold">Cost / Result</th>
@@ -286,7 +286,10 @@ export default function CampaignsTable({ mode = "admin" }: CampaignsTableProps) 
                   </td>
                   <td className="max-w-[240px] truncate px-3 py-2.5 font-medium text-slate-100" title={r.name}>{r.name}</td>
                   {showAccountCol && (
-                    <td className="whitespace-nowrap px-3 py-2.5 text-slate-400">{accountName(r.accountId)}</td>
+                    <td className="whitespace-nowrap px-3 py-2.5">
+                      <div className="text-slate-200">{accountName(r.accountId)}</div>
+                      {r.accountId && <div className="font-mono text-[10px] text-slate-600">act_{r.accountId}</div>}
+                    </td>
                   )}
                   <td className="px-3 py-2.5">
                     <span className="inline-flex items-center gap-2.5 text-slate-300">
