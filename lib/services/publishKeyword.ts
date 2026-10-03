@@ -24,7 +24,7 @@ export async function publishSavedKeyword(id: string): Promise<{ url: string }> 
 
   const { data: site, error: siteErr } = await db
     .from("search_console_sites")
-    .select("publish_url,publish_secret,label")
+    .select("publish_url,publish_secret,label,domain,path_prefix")
     .eq("id", row.site_id)
     .single();
   if (siteErr || !site) throw new PublishError("Site not found");
@@ -48,6 +48,9 @@ export async function publishSavedKeyword(id: string): Promise<{ url: string }> 
         bodyHtml: row.draft_html,
         tag: row.draft_tag ?? "Optimization",
         language: "id",
+        // Extra, optional: which website this is for. A sub-website has a pathPrefix such as "/ac-tipe-hu/";
+        // an endpoint that serves several sites can use it to pick the right blog. Others can ignore it.
+        site: { domain: String(site.domain ?? "").split("/")[0], pathPrefix: site.path_prefix ?? null },
       }),
     });
   } catch (err) {

@@ -19,7 +19,9 @@ Body:
   "excerpt": "…",          required, 1–2 sentences for the blog card
   "bodyHtml": "<h2>…",     required, the article body as HTML (h2/h3/p/ul/ol/li/a/strong/em/blockquote/table)
   "tag": "…",              required, a category label
-  "language": "id"         "id" (Indonesian) unless told otherwise
+  "language": "id",        "id" (Indonesian) unless told otherwise
+  "site": { "domain": "nanocare.id", "pathPrefix": "/ac-tipe-hu/" }   optional context: which website this post is for
+                           (pathPrefix is null for a main site, or e.g. "/ac-tipe-hu/" for a sub-website). Ignore it if unused.
 }
 
 200  { "ok": true, "url": "https://<domain>/blog/<slug>/" }     published (url = the live page)

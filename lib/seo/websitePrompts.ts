@@ -14,7 +14,9 @@ Body:
   "excerpt": "…",          required, 1–2 sentences for the blog card
   "bodyHtml": "<h2>…",     required, the article body as HTML (h2/h3/p/ul/ol/li/a/strong/em/blockquote/table)
   "tag": "…",              required, a category label
-  "language": "id"         "id" (Indonesian) unless told otherwise
+  "language": "id",        "id" (Indonesian) unless told otherwise
+  "site": { "domain": "nanocare.id", "pathPrefix": "/ac-tipe-hu/" }   optional context: which website this post is for
+                           (pathPrefix is null for a main site, or e.g. "/ac-tipe-hu/" for a sub-website). Ignore it if unused.
 }
 
 200  { "ok": true, "url": "https://<domain>/blog/<slug>/" }     published (url = the live page)
@@ -64,9 +66,12 @@ ${HOW_TO_TEST}`;
 }
 
 // For any other Claude-built website: inspect it, then implement the same contract in whatever way fits.
-export function genericSitePrompt(domain: string): string {
-  return `I am connecting my Digital Ads app (Meta Ads Engine) to this website (${domain}) so finished blog posts can be published straight from that app. Work in this project.
-
+export function genericSitePrompt(domain: string, pathPrefix?: string | null): string {
+  const sub = pathPrefix
+    ? `\nIMPORTANT: this is a SUB-WEBSITE. It lives at https://${domain}${pathPrefix} (a section of the main site ${domain}). Its blog is at https://${domain}${pathPrefix}blog/ and each post must be published at https://${domain}${pathPrefix}blog/<slug>/. Publish only into this sub-website's blog, add only its own blog listing and sitemap entries, and never touch the main site's blog or other sub-websites. The "url" you return must be that full address.\n`
+    : "";
+  return `I am connecting my Digital Ads app (Meta Ads Engine) to this website (${domain}${pathPrefix ?? ""}) so finished blog posts can be published straight from that app. Work in this project.
+${sub}
 First, inspect how this site is built and where its blog posts live (static HTML uploaded over FTP/SFTP, a Next.js app with MDX/markdown files, a database/CMS table, or something else). Tell me in 3-4 lines what you found and which approach you will use, then wait for my OK before changing anything.
 
 Then add ONE authenticated endpoint that receives a finished post and publishes it using this site's own mechanism and template (same look as the existing posts, same blog listing, same sitemap, same URL pattern).

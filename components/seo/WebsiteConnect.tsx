@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { AlertTriangle, Check, CheckCircle2, Copy, ExternalLink, Eye, EyeOff, KeyRound, Loader2, Plug, Rocket, XCircle } from "lucide-react";
+import CustomSelect from "@/components/CustomSelect";
 import { genericSitePrompt, profesorSitePrompt } from "@/lib/seo/websitePrompts";
 import type { ConnectionState } from "@/lib/seo/classifyPublish";
 
@@ -13,6 +14,7 @@ interface Site {
   publish_secret: string | null;
   publish_cadence_per_week: number;
   parent_site_id: string | null;
+  path_prefix: string | null;
 }
 
 interface TestResult {
@@ -57,7 +59,8 @@ function SiteCard({ site, onChanged }: { site: Site; onChanged: () => void }) {
   const [msg, setMsg] = useState("");
   const [test, setTest] = useState<TestResult | null>(null);
   const [history, setHistory] = useState<History | null>(null);
-  const [promptKind, setPromptKind] = useState<"profesor" | "generic">(/profesoronline\.id$/i.test(site.domain) ? "profesor" : "generic");
+  const isSub = Boolean(site.parent_site_id);
+  const [promptKind, setPromptKind] = useState<"profesor" | "generic">(!isSub && /^profesoronline\.id$/i.test(site.domain) ? "profesor" : "generic");
 
   const dirty = url.trim() !== (site.publish_url ?? "") || secret.trim() !== (site.publish_secret ?? "");
   const configured = Boolean(site.publish_url && site.publish_secret);
@@ -113,12 +116,13 @@ function SiteCard({ site, onChanged }: { site: Site; onChanged: () => void }) {
   }
 
   const connected = test ? GOOD.includes(test.state) : null;
-  const prompt = promptKind === "profesor" ? profesorSitePrompt(site.domain) : genericSitePrompt(site.domain);
+  const rootDomain = site.domain.split("/")[0];
+  const prompt = promptKind === "profesor" ? profesorSitePrompt(rootDomain) : genericSitePrompt(rootDomain, site.path_prefix);
   const queued = history?.counts.approved ?? 0;
   const published = history?.counts.published ?? 0;
 
   return (
-    <div className="glass-panel p-5 sm:p-6">
+    <div className={`glass-panel p-5 sm:p-6 ${isSub ? "ml-4 border-l-2 border-l-cyan-500/30 sm:ml-8" : ""}`}>
       {/* Header */}
       <div className="flex flex-wrap items-center gap-3">
         <span className="grid h-10 w-10 place-items-center rounded-xl" style={{ background: "rgba(34,211,238,0.1)", boxShadow: "0 0 0 1px rgba(34,211,238,0.3)" }}>
@@ -126,8 +130,8 @@ function SiteCard({ site, onChanged }: { site: Site; onChanged: () => void }) {
         </span>
         <div className="min-w-0">
           <div className="text-sm font-semibold text-slate-100">{site.label}</div>
-          <a href={`https://${site.domain}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[11px] text-slate-500 hover:text-cyan-300">
-            {site.domain} <ExternalLink size={10} />
+          <a href={`https://${site.domain}${isSub ? "blog" : ""}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[11px] text-slate-500 hover:text-cyan-300">
+            {isSub ? `Sub-website · ${site.domain}blog` : site.domain} <ExternalLink size={10} />
           </a>
         </div>
         <span
@@ -239,7 +243,7 @@ function SiteCard({ site, onChanged }: { site: Site; onChanged: () => void }) {
         <summary className="cursor-pointer select-none px-4 py-3 text-xs font-semibold text-slate-200">Set up the website side (a prompt for Claude Code in the website&apos;s project)</summary>
         <div className="border-t border-white/[0.06] px-4 py-4 text-xs leading-relaxed text-slate-400">
           <ol className="mb-3 list-decimal space-y-1 pl-4">
-            <li>Open the <b className="text-slate-200">{site.domain}</b> website project in Claude Code.</li>
+            <li>Open the <b className="text-slate-200">{rootDomain}</b> website project in Claude Code{isSub ? <> (the project that contains the <b className="text-slate-200">{site.path_prefix}</b> section)</> : null}.</li>
             <li>Paste the prompt below and let it build and deploy the publish endpoint. When it asks for the secret, give it the one shown above.</li>
             <li>Paste the endpoint URL it gives you into the box above, <b className="text-slate-200">Save</b>, then <b className="text-slate-200">Test connection</b>.</li>
           </ol>
@@ -262,6 +266,66 @@ function SiteCard({ site, onChanged }: { site: Site; onChanged: () => void }) {
   );
 }
 
+// A sub-website is one section of a main site (nanocare.id/ac-tipe-hu/) with its own blog, queue and publish target.
+function AddSubsite({ roots, onAdded }: { roots: Site[]; onAdded: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [parent, setParent] = useState(roots[0]?.id ?? "");
+  const [prefix, setPrefix] = useState("/");
+  const [name, setName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  async function add() {
+    setBusy(true);
+    setErr("");
+    const res = await fetch("/api/seo/gsc/sites", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ parentSiteId: parent, pathPrefix: prefix, label: name }),
+    }).then((r) => r.json()).catch(() => ({ ok: false, error: "Network error" }));
+    setBusy(false);
+    if (!res.ok) return setErr(res.error || "Could not add the sub-website.");
+    setOpen(false);
+    setName("");
+    setPrefix("/");
+    onAdded();
+  }
+
+  if (!open) {
+    return (
+      <button onClick={() => setOpen(true)} className="self-start rounded-lg bg-white/[0.05] px-4 py-2 text-xs font-semibold text-cyan-300 hover:bg-white/[0.09]">
+        + Add a sub-website (a section with its own blog, like /ac-tipe-hu/)
+      </button>
+    );
+  }
+  const valid = parent && prefix.replace(/\//g, "").trim() !== "" && name.trim() !== "";
+  return (
+    <div className="glass-panel p-5">
+      <div className="mb-3 text-sm font-semibold text-slate-100">Add a sub-website</div>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div>
+          <span className={label}>Main website</span>
+          <CustomSelect value={parent} onChange={setParent} options={roots.map((r) => ({ value: r.id, label: r.domain }))} />
+        </div>
+        <div>
+          <span className={label}>Path of the section</span>
+          <input value={prefix} onChange={(e) => setPrefix(e.target.value)} placeholder="/ac-tipe-hu/" className={inputCls} />
+        </div>
+        <div>
+          <span className={label}>Name</span>
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nanocare — AC Tipe HU" className={inputCls} />
+        </div>
+      </div>
+      <p className="mt-2 text-[11px] text-slate-500">Its blog would be at <span className="text-slate-300">{roots.find((r) => r.id === parent)?.domain ?? "domain"}{"/" + prefix.replace(/^\/+|\/+$/g, "")}/blog</span>. It gets its own queue of posts and its own publish endpoint.</p>
+      <div className="mt-3 flex items-center gap-2">
+        <button onClick={add} disabled={busy || !valid} className="rounded-lg bg-emerald-500/15 px-4 py-2 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/25 disabled:opacity-40">{busy ? "Adding…" : "Add sub-website"}</button>
+        <button onClick={() => setOpen(false)} className="text-xs text-slate-500 hover:text-slate-300">Cancel</button>
+        {err && <span className="text-[11px] text-rose-300">{err}</span>}
+      </div>
+    </div>
+  );
+}
+
 export default function WebsiteConnect() {
   const [sites, setSites] = useState<Site[]>([]);
   const [loading, setLoading] = useState(true);
@@ -270,7 +334,7 @@ export default function WebsiteConnect() {
   const load = useCallback(async () => {
     const j = await fetch("/api/seo/gsc/sites", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ ok: false, error: "Network error" }));
     if (j.ok) {
-      setSites((j.sites as Site[]).filter((s) => !s.parent_site_id));
+      setSites(j.sites as Site[]);
       setError("");
     } else setError(j.error || "Could not load websites");
     setLoading(false);
@@ -289,7 +353,13 @@ export default function WebsiteConnect() {
       {sites.length === 0 ? (
         <div className="glass-panel p-8 text-center text-xs text-slate-500">No websites yet. Add one in Manage Websites first.</div>
       ) : (
-        sites.map((s) => <SiteCard key={s.id} site={s} onChanged={load} />)
+        <>
+          {/* each main site, followed by its sub-websites */}
+          {sites.filter((s) => !s.parent_site_id).flatMap((root) => [root, ...sites.filter((c) => c.parent_site_id === root.id)]).map((s) => (
+            <SiteCard key={s.id} site={s} onChanged={load} />
+          ))}
+          <AddSubsite roots={sites.filter((s) => !s.parent_site_id)} onAdded={load} />
+        </>
       )}
     </div>
   );

@@ -1,7 +1,9 @@
-# Paste into Claude Code in any other Claude-built website project (replace the domain)
+# Paste into Claude Code in the Nanocare website project (the one containing /ac-tipe-hu/)
 
 ```
-I am connecting my Digital Ads app (Meta Ads Engine) to this website (YOUR-DOMAIN.com) so finished blog posts can be published straight from that app. Work in this project.
+I am connecting my Digital Ads app (Meta Ads Engine) to this website (nanocare.id/ac-tipe-hu/) so finished blog posts can be published straight from that app. Work in this project.
+
+IMPORTANT: this is a SUB-WEBSITE. It lives at https://nanocare.id/ac-tipe-hu/ (a section of the main site nanocare.id). Its blog is at https://nanocare.id/ac-tipe-hu/blog/ and each post must be published at https://nanocare.id/ac-tipe-hu/blog/<slug>/. Publish only into this sub-website's blog, add only its own blog listing and sitemap entries, and never touch the main site's blog or other sub-websites. The "url" you return must be that full address.
 
 First, inspect how this site is built and where its blog posts live (static HTML uploaded over FTP/SFTP, a Next.js app with MDX/markdown files, a database/CMS table, or something else). Tell me in 3-4 lines what you found and which approach you will use, then wait for my OK before changing anything.
 
