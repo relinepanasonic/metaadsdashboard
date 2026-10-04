@@ -211,7 +211,7 @@ function SiteCard({ site, onChanged }: { site: Site; onChanged: () => void }) {
       {/* Stats */}
       <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
         {[
-          { l: "Waiting to publish", v: queued, hint: "approved in the Content Engine" },
+          { l: "Waiting to publish", v: queued, hint: "approved in Blog Engine → Content Engine" },
           { l: "Published", v: published, hint: "sent to this website" },
           { l: "Auto-publish", v: history ? (history.cadencePerWeek > 0 ? `${history.cadencePerWeek}/week` : "Off") : "—", hint: "set in Manage Websites" },
           { l: "Last auto-publish", v: history?.lastAutoPublishedAt ? new Date(history.lastAutoPublishedAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short" }) : "—", hint: "" },
@@ -292,7 +292,7 @@ function AiOfficePanel() {
         </span>
         <div>
           <div className="text-sm font-semibold text-slate-100">Write blogs from your ERP&apos;s AI Office</div>
-          <div className="text-[11px] text-slate-500">The AI Office writes the article and sends it here as a draft. You review it in the Content Engine and publish.</div>
+          <div className="text-[11px] text-slate-500">The AI Office writes the article and sends it here as a draft. You review it in Blog Engine → Content Engine and publish.</div>
         </div>
         <span className={`ml-auto rounded-full px-3 py-1 text-[11px] font-bold ${status?.configured ? "bg-emerald-500/15 text-emerald-300" : "bg-amber-500/15 text-amber-300"}`}>
           {status ? (status.configured ? "Ready to receive" : "Secret not set yet") : "…"}
@@ -306,7 +306,7 @@ function AiOfficePanel() {
           <code className="rounded bg-white/[0.06] px-1 text-cyan-300">ADS_INGEST_SECRET</code>. Redeploy both.
         </li>
         <li>Open the <b className="text-slate-200">ERP project</b> in Claude Code and paste the prompt below. It builds the &ldquo;Send to Blog Queue&rdquo; button in the AI Office.</li>
-        <li>In the AI Office, write a post and send it. It appears in <b className="text-slate-200">SEO → Content Engine</b> as a draft, with the &ldquo;Dari Pengalaman Kami&rdquo; section waiting for your real experience.</li>
+        <li>In the AI Office, write a post and send it. It appears in <b className="text-slate-200">SEO → Blog Engine → Content Engine</b> as a draft, with the &ldquo;Dari Pengalaman Kami&rdquo; section waiting for your real experience.</li>
       </ol>
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -423,7 +423,7 @@ export default function WebsiteConnect() {
   return (
     <div className="flex flex-col gap-4">
       <div className="glass-panel p-4 text-xs leading-relaxed text-slate-400" style={{ boxShadow: "inset 0 0 0 1px rgba(34,211,238,0.2)" }}>
-        <b className="text-slate-200">How publishing works.</b> You write and approve a post in the <b className="text-slate-200">Content Engine</b>. This app then sends it to the website&apos;s own publish endpoint, which puts it on the site in the site&apos;s own design. Each website needs that endpoint once, plus a shared secret so only this app can publish. <b className="text-slate-200">Test connection</b> checks all of it without publishing anything.
+        <b className="text-slate-200">How publishing works.</b> You write and approve a post in <b className="text-slate-200">Blog Engine → Content Engine</b>, and watch each upload in <b className="text-slate-200">Blog Uploader</b>. This app then sends it to the website&apos;s own publish endpoint, which puts it on the site in the site&apos;s own design. Each website needs that endpoint once, plus a shared secret so only this app can publish. <b className="text-slate-200">Test connection</b> checks all of it without publishing anything.
       </div>
       {sites.length === 0 ? (
         <div className="glass-panel p-8 text-center text-xs text-slate-500">No websites yet. Add one in Manage Websites first.</div>

@@ -52,7 +52,7 @@ export async function GET(req: NextRequest) {
     }
 
     try {
-      const { url } = await publishSavedKeyword(next.id);
+      const { url } = await publishSavedKeyword(next.id, { trigger: "auto" });
       await db.from("search_console_sites").update({ last_auto_published_at: new Date().toISOString() }).eq("id", site.id);
       results.push({ site: site.label, published: url });
     } catch (err) {

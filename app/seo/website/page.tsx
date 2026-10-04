@@ -1,5 +1,6 @@
-import WebsiteConnect from "@/components/seo/WebsiteConnect";
+import { redirect } from "next/navigation";
 
-export default function ConnectToWebsitePage() {
-  return <WebsiteConnect />;
+// "Connect to Website" became Blog Engine → Connection 2 Web.
+export default function OldConnectToWebsite() {
+  redirect("/seo/blog/connection");
 }

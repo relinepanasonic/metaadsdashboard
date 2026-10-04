@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
   if (!id) return NextResponse.json({ ok: false, error: "Missing keyword id" }, { status: 400 });
 
   try {
-    const { url } = await publishSavedKeyword(id);
+    const { url } = await publishSavedKeyword(id, { trigger: "manual", by: me.username });
     return NextResponse.json({ ok: true, url });
   } catch (err) {
     const status = err instanceof PublishError ? 400 : 500;

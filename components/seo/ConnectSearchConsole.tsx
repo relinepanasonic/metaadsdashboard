@@ -559,7 +559,7 @@ export default function ConnectSearchConsole({ serviceAccountEmail }: { serviceA
                   {publishTarget === s.id && (
                     <div className="border-t border-white/[0.06] p-3">
                       <p className="mb-2 text-[11px] text-slate-400">
-                        Where the Content Engine sends finished posts for this site — the URL of that site&apos;s blog-automation <code className="rounded bg-white/[0.06] px-1">/api/publish</code> endpoint and its shared secret.
+                        Where the Blog Engine sends finished posts for this site — the URL of that site&apos;s blog-automation <code className="rounded bg-white/[0.06] px-1">/api/publish</code> endpoint and its shared secret.
                       </p>
                       <div className="flex flex-col gap-2">
                         <input

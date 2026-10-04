@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { timingSafeEqual } from "crypto";
 import { db } from "@/lib/supabase/db";
 import { validateImport, type ImportInput } from "@/lib/seo/importValidation";
+import { logBlogEvent } from "@/lib/services/blogLog";
 
 export const maxDuration = 60;
 
@@ -97,6 +98,8 @@ export async function POST(req: NextRequest) {
     if (error || !data) return fail(error?.message ?? "Could not save the draft.", 500);
     id = data.id;
   }
+
+  await logBlogEvent({ site_id: site.id, site_label: site.label, keyword_id: id, keyword: post.keyword, title: post.title, slug: post.slug, event: "received", status: "received", trigger: "ai-office" });
 
   return NextResponse.json({
     ok: true,

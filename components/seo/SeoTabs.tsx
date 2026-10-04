@@ -2,19 +2,18 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, SearchCode, Factory, Sparkles, Wrench, Bookmark, Link2 } from "lucide-react";
+import { LayoutDashboard, SearchCode, Factory, Sparkles, Wrench, Bookmark } from "lucide-react";
 import { useSeoSite } from "./SeoSiteProvider";
 
 // Tabs a client can open. Research runs paid keyword lookups; GEO and Technical
 // still show demo numbers, which a client should not be shown as their own.
-const CLIENT_TABS = new Set(["/seo", "/seo/keywords", "/seo/content"]);
+const CLIENT_TABS = new Set(["/seo", "/seo/keywords", "/seo/blog"]);
 
 const TABS = [
   { href: "/seo", label: "Dashboard", icon: LayoutDashboard },
   { href: "/seo/research", label: "Research", icon: SearchCode },
   { href: "/seo/keywords", label: "Keywords", icon: Bookmark },
-  { href: "/seo/content", label: "Content Engine", icon: Factory },
-  { href: "/seo/website", label: "Connect to Website", icon: Link2 },
+  { href: "/seo/blog", label: "Blog Engine", icon: Factory },
   { href: "/seo/geo", label: "GEO & AI Visibility", icon: Sparkles },
   { href: "/seo/technical", label: "Technical & Indexing", icon: Wrench },
 ];
@@ -27,7 +26,8 @@ export default function SeoTabs() {
   return (
     <div className="mb-6 flex flex-wrap items-center gap-1.5 rounded-xl border border-white/[0.06] bg-[#0b0e14]/60 p-1.5">
       {tabs.map((t) => {
-        const active = pathname === t.href;
+        // Blog Engine has sub-pages, so it stays highlighted anywhere inside /seo/blog.
+        const active = pathname === t.href || (t.href !== "/seo" && pathname.startsWith(t.href + "/"));
         const Icon = t.icon;
         return (
           <Link
