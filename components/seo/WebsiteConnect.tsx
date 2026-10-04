@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { AlertTriangle, Check, CheckCircle2, Copy, ExternalLink, Eye, EyeOff, KeyRound, Loader2, Plug, Rocket, XCircle } from "lucide-react";
 import CustomSelect from "@/components/CustomSelect";
 import { genericSitePrompt, profesorSitePrompt } from "@/lib/seo/websitePrompts";
+import { aiOfficeBlogPrompt } from "@/lib/seo/aiOfficePrompt";
 import type { ConnectionState } from "@/lib/seo/classifyPublish";
 
 interface Site {
@@ -266,6 +267,80 @@ function SiteCard({ site, onChanged }: { site: Site; onChanged: () => void }) {
   );
 }
 
+// The other direction: your ERP's AI Office writes a post and sends it here as a DRAFT.
+function AiOfficePanel() {
+  const [status, setStatus] = useState<{ configured: boolean; endpoint: string } | null>(null);
+  const [secret, setSecret] = useState("");
+
+  useEffect(() => {
+    fetch("/api/seo/website/ingest-status", { cache: "no-store" }).then((r) => r.json()).then((j) => j.ok && setStatus(j)).catch(() => {});
+  }, []);
+
+  // A random value for you to copy into BOTH apps. It is made in your browser and never stored or sent anywhere.
+  function makeSecret() {
+    const bytes = crypto.getRandomValues(new Uint8Array(32));
+    setSecret(btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""));
+  }
+
+  const endpoint = status?.endpoint ?? "";
+  const prompt = aiOfficeBlogPrompt(endpoint || "https://YOUR-DIGITAL-ADS-APP/api/seo/content/import");
+  return (
+    <div className="glass-panel p-5 sm:p-6" style={{ boxShadow: "inset 0 0 0 1px rgba(139,92,246,0.3)" }}>
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="grid h-10 w-10 place-items-center rounded-xl" style={{ background: "rgba(139,92,246,0.12)", boxShadow: "0 0 0 1px rgba(139,92,246,0.35)" }}>
+          <Rocket size={18} className="text-violet-300" />
+        </span>
+        <div>
+          <div className="text-sm font-semibold text-slate-100">Write blogs from your ERP&apos;s AI Office</div>
+          <div className="text-[11px] text-slate-500">The AI Office writes the article and sends it here as a draft. You review it in the Content Engine and publish.</div>
+        </div>
+        <span className={`ml-auto rounded-full px-3 py-1 text-[11px] font-bold ${status?.configured ? "bg-emerald-500/15 text-emerald-300" : "bg-amber-500/15 text-amber-300"}`}>
+          {status ? (status.configured ? "Ready to receive" : "Secret not set yet") : "…"}
+        </span>
+      </div>
+
+      <ol className="mt-4 list-decimal space-y-2 pl-5 text-xs leading-relaxed text-slate-400">
+        <li>
+          Make one shared secret (button below) and add it in <b className="text-slate-200">two places</b> as an environment variable: this app&apos;s Vercel project as{" "}
+          <code className="rounded bg-white/[0.06] px-1 text-cyan-300">CONTENT_INGEST_SECRET</code>, and the ERP&apos;s Vercel project as{" "}
+          <code className="rounded bg-white/[0.06] px-1 text-cyan-300">ADS_INGEST_SECRET</code>. Redeploy both.
+        </li>
+        <li>Open the <b className="text-slate-200">ERP project</b> in Claude Code and paste the prompt below. It builds the &ldquo;Send to Blog Queue&rdquo; button in the AI Office.</li>
+        <li>In the AI Office, write a post and send it. It appears in <b className="text-slate-200">SEO → Content Engine</b> as a draft, with the &ldquo;Dari Pengalaman Kami&rdquo; section waiting for your real experience.</li>
+      </ol>
+
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        <button type="button" onClick={makeSecret} className="inline-flex items-center gap-1.5 rounded-lg bg-white/[0.06] px-3 py-1.5 text-[11px] font-semibold text-slate-200 hover:bg-white/[0.1]">
+          <KeyRound size={12} /> Make a secret
+        </button>
+        {secret && (
+          <>
+            <input readOnly value={secret} onFocus={(e) => e.currentTarget.select()} className={`${inputCls} max-w-[420px] font-mono`} />
+            <CopyButton text={secret} />
+            <span className="text-[11px] text-slate-500">Shown only here, never saved. Put it in both Vercel projects now.</span>
+          </>
+        )}
+      </div>
+
+      <div className="mt-4">
+        <span className={label}>Address the AI Office sends to</span>
+        <div className="flex gap-2">
+          <input readOnly value={endpoint} className={`${inputCls} font-mono`} />
+          {endpoint && <CopyButton text={endpoint} />}
+        </div>
+      </div>
+
+      <details className="mt-4 rounded-xl border border-white/[0.08] bg-white/[0.02]">
+        <summary className="cursor-pointer select-none px-4 py-3 text-xs font-semibold text-slate-200">Prompt for Claude Code in the ERP project</summary>
+        <div className="border-t border-white/[0.06] px-4 py-4">
+          <div className="mb-2 flex justify-end"><CopyButton text={prompt}>Copy prompt</CopyButton></div>
+          <textarea readOnly value={prompt} rows={12} className={`${inputCls} resize-y font-mono text-[11px] leading-relaxed`} onFocus={(e) => e.currentTarget.select()} />
+        </div>
+      </details>
+    </div>
+  );
+}
+
 // A sub-website is one section of a main site (nanocare.id/ac-tipe-hu/) with its own blog, queue and publish target.
 function AddSubsite({ roots, onAdded }: { roots: Site[]; onAdded: () => void }) {
   const [open, setOpen] = useState(false);
@@ -361,6 +436,7 @@ export default function WebsiteConnect() {
           <AddSubsite roots={sites.filter((s) => !s.parent_site_id)} onAdded={load} />
         </>
       )}
+      <AiOfficePanel />
     </div>
   );
 }
