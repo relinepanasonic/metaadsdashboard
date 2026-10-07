@@ -12,6 +12,10 @@ export const PLATFORMS: Platform[] = ["instagram", "facebook", "threads", "x", "
 // (Instagram and Facebook are linked there too, but also feed the Dashboard).
 export const PUBLISH_ONLY_PLATFORMS: Platform[] = ["threads", "x", "tiktok", "youtube"];
 
+// Platforms that have a working route in the Make.com scenario. Add a platform here once its
+// route is built (Facebook, Threads and X are listed in the composer but locked until then).
+export const ACTIVE_PLATFORMS: Platform[] = ["instagram", "youtube", "tiktok"];
+
 export const PLATFORM_LABEL: Record<Platform, string> = {
   instagram: "Instagram",
   facebook: "Facebook",
@@ -49,6 +53,15 @@ export interface TargetInput {
 // The first line of the caption, used as the YouTube video title.
 export function titleFromCaption(caption: string): string {
   return (caption.split(/\r?\n/).find((l) => l.trim()) ?? "").trim().slice(0, YOUTUBE_TITLE_LIMIT);
+}
+
+// Why a platform cannot be picked for this content type (shown in the composer), or null when it can.
+export function platformBlock(platform: Platform, contentType: ContentType): string | null {
+  if (!ACTIVE_PLATFORMS.includes(platform)) return "Not set up in Make yet";
+  if (contentType === "text" && (platform === "instagram" || platform === "tiktok" || platform === "youtube")) return "Needs a photo or video";
+  if (contentType === "image" && (platform === "tiktok" || platform === "youtube")) return "Needs a video";
+  if (contentType === "carousel" && (platform === "tiktok" || platform === "facebook" || platform === "youtube")) return "No carousels";
+  return null;
 }
 
 // Returns an error message, or null when the combination can actually be posted.

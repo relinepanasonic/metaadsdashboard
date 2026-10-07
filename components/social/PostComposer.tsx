@@ -6,7 +6,7 @@ import { AlertTriangle, ImagePlus, Loader2, Plus, Trash2, X } from "lucide-react
 import CustomSelect from "@/components/CustomSelect";
 import { createClient } from "@/lib/supabase/client";
 import {
-  CAPTION_LIMIT, CONTENT_LABEL, PLATFORM_LABEL, PLATFORMS, PUBLISH_ONLY_PLATFORMS, validatePost,
+  CAPTION_LIMIT, CONTENT_LABEL, PLATFORM_LABEL, PLATFORMS, PUBLISH_ONLY_PLATFORMS, platformBlock, validatePost,
   type ContentType, type MediaItem, type Platform,
 } from "@/lib/services/scheduler";
 
@@ -200,7 +200,13 @@ export default function PostComposer({ options, post, duplicate = false, onClose
                 <button
                   key={t}
                   type="button"
-                  onClick={() => { setContentType(t); if (t === "text") setMedia([]); else if (t !== "carousel") setMedia((m) => m.slice(0, 1)); }}
+                  onClick={() => {
+                    setContentType(t);
+                    if (t === "text") setMedia([]);
+                    else if (t !== "carousel") setMedia((m) => m.slice(0, 1));
+                    // accounts that cannot take this kind of post are unticked, so nothing invalid stays picked
+                    setPicked((prev) => new Set([...prev].filter((k) => !platformBlock(k.split("|")[0] as Platform, t))));
+                  }}
                   className={`rounded-lg px-3 py-2 text-xs font-semibold ${contentType === t ? "bg-cyan-500/15 text-cyan-300" : "bg-white/[0.04] text-slate-400 hover:text-slate-200"}`}
                   style={contentType === t ? { boxShadow: "inset 0 0 0 1px rgba(34,211,238,0.35)" } : undefined}
                 >
@@ -217,9 +223,14 @@ export default function PostComposer({ options, post, duplicate = false, onClose
             <div className="rounded-lg bg-white/[0.03] p-3 text-xs text-slate-500">Pick a brand first.</div>
           ) : (
             <div className="grid gap-2 sm:grid-cols-2">
-              {byPlatform.map(({ platform, list }) => (
-                <div key={platform} className="rounded-xl bg-white/[0.03] p-3">
-                  <div className="mb-1.5 text-[11px] font-semibold text-slate-300">{PLATFORM_LABEL[platform]}</div>
+              {byPlatform.map(({ platform, list }) => {
+                const block = platformBlock(platform, contentType);
+                return (
+                <div key={platform} className={`rounded-xl bg-white/[0.03] p-3 ${block ? "opacity-50" : ""}`}>
+                  <div className="mb-1.5 flex items-center justify-between gap-2 text-[11px] font-semibold text-slate-300">
+                    <span>{PLATFORM_LABEL[platform]}</span>
+                    {block && <span className="rounded bg-white/[0.06] px-1.5 py-0.5 text-[10px] font-medium text-slate-500">🔒 {block}</span>}
+                  </div>
                   {list.length === 0 ? (
                     <div className="text-[11px] text-slate-600">
                       {platform === "instagram" || platform === "facebook" ? "None linked — add it on the Clients page." : "None yet — add it on the Clients page."}
@@ -228,8 +239,8 @@ export default function PostComposer({ options, post, duplicate = false, onClose
                     list.map((a) => {
                       const on = picked.has(`${a.platform}|${a.handle ?? ""}`);
                       return (
-                        <label key={a.id} className="flex cursor-pointer items-center gap-2 py-1 text-xs text-slate-200">
-                          <input type="checkbox" checked={on} onChange={() => toggle(a)} className="h-3.5 w-3.5 accent-cyan-400" />
+                        <label key={a.id} className={`flex items-center gap-2 py-1 text-xs text-slate-200 ${block && !on ? "cursor-not-allowed" : "cursor-pointer"}`}>
+                          <input type="checkbox" checked={on} disabled={Boolean(block) && !on} onChange={() => toggle(a)} className="h-3.5 w-3.5 accent-cyan-400" />
                           <span className="truncate">{a.handle ?? a.externalId}</span>
                           {a.removable && (
                             <button type="button" onClick={(e) => { e.preventDefault(); removeProfile(a.id); }} className="ml-auto text-slate-600 hover:text-rose-300" title="Remove this account"><Trash2 size={11} /></button>
@@ -239,7 +250,8 @@ export default function PostComposer({ options, post, duplicate = false, onClose
                     })
                   )}
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
           {client && (
