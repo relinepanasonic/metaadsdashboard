@@ -23,6 +23,7 @@ interface Post {
   clientName: string | null;
   caption: string;
   contentType: ContentType;
+  topic?: string | null;
   media: MediaItem[];
   scheduledAt: string;
   status: string;
@@ -167,11 +168,11 @@ export default function Scheduler() {
   const makeOk = lastPollAge != null && lastPollAge <= 130;
 
   function duplicate(p: Post) {
-    setComposer({ duplicate: true, post: { id: p.id, clientId: p.clientId, caption: p.caption, contentType: p.contentType, media: p.media, scheduledAt: p.scheduledAt, status: p.status, targets: [] } });
+    setComposer({ duplicate: true, post: { id: p.id, clientId: p.clientId, caption: p.caption, contentType: p.contentType, media: p.media, scheduledAt: p.scheduledAt, status: p.status, targets: [], topic: p.topic ?? null } });
   }
 
   function edit(p: Post) {
-    setComposer({ post: { id: p.id, clientId: p.clientId, caption: p.caption, contentType: p.contentType, media: p.media, scheduledAt: p.scheduledAt, status: p.status, targets: p.targets } });
+    setComposer({ post: { id: p.id, clientId: p.clientId, caption: p.caption, contentType: p.contentType, media: p.media, scheduledAt: p.scheduledAt, status: p.status, targets: p.targets, topic: p.topic ?? null } });
   }
 
   const FILTERS: { id: Filter; label: string }[] = [

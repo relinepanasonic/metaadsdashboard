@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/supabase/db";
 import { getCurrentUser } from "@/lib/auth/currentUser";
+import { cleanTopic } from "@/lib/services/threads";
 import { PLATFORMS, validatePost, type ContentType, type MediaItem, type Platform, type TargetInput } from "@/lib/services/scheduler";
 
 async function staff() {
@@ -8,23 +9,39 @@ async function staff() {
   return me && me.role !== "client" ? me : null;
 }
 
+interface PostRow {
+  id: string;
+  client_id: string | null;
+  caption: string;
+  content_type: string;
+  media: MediaItem[];
+  scheduled_at: string;
+  status: string;
+  created_by: string | null;
+  topic?: string | null;
+  clients: { name: string } | { name: string }[] | null;
+  scheduled_post_targets: unknown[] | null;
+}
+
 export async function GET() {
   if (!(await staff())) return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
   if (!db) return NextResponse.json({ ok: false, error: "Database not configured" }, { status: 500 });
 
-  const { data, error } = await db
-    .from("scheduled_posts")
-    .select("id,client_id,caption,content_type,media,scheduled_at,status,created_by,created_at,clients(name),scheduled_post_targets(id,platform,handle,external_id,status,attempts,published_at,published_url,error)")
-    .order("scheduled_at", { ascending: false })
-    .limit(300);
+  const cols = (topic: boolean) =>
+    `id,client_id,caption,content_type,media,scheduled_at,status,created_by,created_at,${topic ? "topic," : ""}clients(name),scheduled_post_targets(id,platform,handle,external_id,status,attempts,published_at,published_url,error)`;
+  const load = (topic: boolean) => db!.from("scheduled_posts").select(cols(topic)).order("scheduled_at", { ascending: false }).limit(300);
+  let { data: rows, error } = await load(true);
+  if (error && /topic/i.test(error.message)) ({ data: rows, error } = await load(false)); // migration 0028 not run yet
+  const data = (rows ?? []) as unknown as PostRow[];
   if (error) {
     const missing = /scheduled_posts|schema cache|does not exist/i.test(error.message);
     return NextResponse.json({ ok: false, error: missing ? "The scheduler tables don't exist yet — run migration 0024 in Supabase." : error.message, needsMigration: missing }, { status: 500 });
   }
 
-  const posts = (data ?? []).map((p) => {
-    const rel = p.clients as unknown as { name: string } | { name: string }[] | null;
+  const posts = data.map((p) => {
+    const rel = p.clients;
     return {
+      topic: p.topic ?? null,
       id: p.id,
       clientId: p.client_id,
       clientName: Array.isArray(rel) ? rel[0]?.name ?? null : rel?.name ?? null,
@@ -48,6 +65,7 @@ interface Body {
   scheduledAt?: string;
   status?: "draft" | "scheduled";
   targets?: TargetInput[];
+  topic?: string | null; // Threads topic tag
 }
 
 export async function POST(req: NextRequest) {
@@ -70,7 +88,8 @@ export async function POST(req: NextRequest) {
 
   const { data: post, error } = await db
     .from("scheduled_posts")
-    .insert({ client_id: b.clientId || null, caption, content_type: contentType, media, scheduled_at: when.toISOString(), status, created_by: me.username })
+    // topic is only sent when set, so posts without one keep working before migration 0028 is run
+    .insert({ client_id: b.clientId || null, caption, content_type: contentType, media, scheduled_at: when.toISOString(), status, created_by: me.username, ...(cleanTopic(b.topic) && targets.some((t) => t.platform === "threads") ? { topic: cleanTopic(b.topic) } : {}) })
     .select("id")
     .single();
   if (error || !post) return NextResponse.json({ ok: false, error: error?.message ?? "Could not save the post." }, { status: 500 });

@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
+import { publishDueThreads } from "@/lib/services/threadsRunner";
 import { db } from "@/lib/supabase/db";
 import { schedulerAuthorized, schedulerConfigured } from "@/lib/services/schedulerAuth";
 import { titleFromCaption, type MediaItem } from "@/lib/services/scheduler";
@@ -60,6 +61,9 @@ async function handle(req: NextRequest) {
     .eq("status", "claimed")
     .lt("claimed_at", staleBefore);
 
+  // Make's check-in doubles as the clock for Threads: anything due is published after this reply goes out.
+  after(() => publishDueThreads().catch(() => null));
+
   const { data: posts, error } = await db
     .from("scheduled_posts")
     .select("id,caption,content_type,media,scheduled_at,clients(name)")
@@ -70,11 +74,13 @@ async function handle(req: NextRequest) {
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
   if (!posts || posts.length === 0) return NextResponse.json({ ok: true, count: 0, jobs: [] });
 
+  // Threads is published by this app itself (not Make), so its destinations never go out as jobs.
   const { data: targets, error: tErr } = await db
     .from("scheduled_post_targets")
     .select("id,post_id,platform,handle,external_id,attempts")
     .in("post_id", posts.map((p) => p.id))
-    .eq("status", "pending");
+    .eq("status", "pending")
+    .neq("platform", "threads");
   if (tErr) return NextResponse.json({ ok: false, error: tErr.message }, { status: 500 });
 
   const byPost = new Map(posts.map((p) => [p.id, p]));

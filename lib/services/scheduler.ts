@@ -12,9 +12,9 @@ export const PLATFORMS: Platform[] = ["instagram", "facebook", "threads", "x", "
 // (Instagram and Facebook are linked there too, but also feed the Dashboard).
 export const PUBLISH_ONLY_PLATFORMS: Platform[] = ["threads", "x", "tiktok", "youtube"];
 
-// Platforms that have a working route in the Make.com scenario. Add a platform here once its
-// route is built (Facebook, Threads and X are listed in the composer but locked until then).
-export const ACTIVE_PLATFORMS: Platform[] = ["instagram", "youtube", "tiktok"];
+// Platforms that can actually be posted to: Instagram, YouTube and TikTok through Make.com, and
+// Threads straight from this app. Facebook and X are listed in the composer but locked until built.
+export const ACTIVE_PLATFORMS: Platform[] = ["instagram", "youtube", "tiktok", "threads"];
 
 export const PLATFORM_LABEL: Record<Platform, string> = {
   instagram: "Instagram",

@@ -21,8 +21,11 @@ export async function GET() {
   const { data: social } = await db.from("social_accounts").select("id,client_id,platform,external_id,handle").order("created_at");
   // Threads / X / TikTok / YouTube accounts (publishing only). Reads as empty if the table is missing.
   const { data: publishing } = await db.from("publish_profiles").select("id,client_id,platform,handle,external_id").order("created_at");
-  const publishingBy = new Map<string, NonNullable<typeof publishing>>();
-  for (const a of publishing ?? []) publishingBy.set(a.client_id, [...(publishingBy.get(a.client_id) ?? []), a]);
+  // Which Threads accounts have logged in (migration 0028); reads as empty before it is run.
+  const { data: logins } = await db.from("publish_profiles").select("id,token_expires_at").eq("platform", "threads");
+  const loggedIn = new Map((logins ?? []).filter((l) => l.token_expires_at).map((l) => [l.id as string, l.token_expires_at as string]));
+  const publishingBy = new Map<string, (NonNullable<typeof publishing>[number] & { login_expires?: string })[]>();
+  for (const a of publishing ?? []) publishingBy.set(a.client_id, [...(publishingBy.get(a.client_id) ?? []), { ...a, login_expires: loggedIn.get(a.id) }]);
   const byClient = new Map<string, typeof social>();
   for (const a of social ?? []) byClient.set(a.client_id, [...(byClient.get(a.client_id) ?? []), a]);
 

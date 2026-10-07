@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/supabase/db";
 import { getCurrentUser } from "@/lib/auth/currentUser";
+import { cleanTopic } from "@/lib/services/threads";
 import { PLATFORMS, validatePost, type ContentType, type MediaItem, type Platform, type TargetInput } from "@/lib/services/scheduler";
 
 async function staff() {
@@ -19,6 +20,7 @@ interface Body {
   scheduledAt?: string;
   status?: "draft" | "scheduled";
   targets?: TargetInput[];
+  topic?: string | null;
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -71,7 +73,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   const { error } = await db
     .from("scheduled_posts")
-    .update({ client_id: b.clientId || null, caption, content_type: contentType, media, scheduled_at: when.toISOString(), status, updated_at: nowIso })
+    .update({ client_id: b.clientId || null, caption, content_type: contentType, media, scheduled_at: when.toISOString(), status, updated_at: nowIso, ...(newTargets.some((t) => t.platform === "threads") ? { topic: cleanTopic(b.topic) } : {}) })
     .eq("id", id);
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
 

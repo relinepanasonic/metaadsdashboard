@@ -18,6 +18,7 @@ interface PublishProfile {
   platform: Platform;
   handle: string | null;
   external_id: string | null;
+  login_expires?: string; // Threads only: when the stored login runs out
 }
 
 interface Client {
@@ -99,6 +100,17 @@ export default function ClientsManager({ canDelete }: { canDelete: boolean }) {
   }
 
   useEffect(load, []);
+
+  // Threads sends the person back here after login: show how it went, then tidy the address bar.
+  const [threadsNote, setThreadsNote] = useState<{ ok: boolean; msg: string } | null>(null);
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    const r = q.get("threads");
+    if (r) {
+      setThreadsNote({ ok: r === "connected", msg: q.get("msg") ?? "" });
+      window.history.replaceState(null, "", window.location.pathname);
+    }
+  }, []);
 
   async function createClient() {
     if (!addForm.name.trim()) return;
@@ -207,6 +219,12 @@ export default function ClientsManager({ canDelete }: { canDelete: boolean }) {
         </div>
       )}
 
+      {threadsNote && (
+        <div className={`mb-3 flex items-center justify-between rounded-lg px-3 py-2 text-xs ${threadsNote.ok ? "bg-emerald-500/10 text-emerald-300" : "bg-rose-500/10 text-rose-300"}`}>
+          <span>{threadsNote.ok ? "✓ " : ""}Threads: {threadsNote.msg}</span>
+          <button onClick={() => setThreadsNote(null)} className="text-slate-400 hover:text-white"><X size={12} /></button>
+        </div>
+      )}
       {error && (
         <div className="glass-panel p-3 text-xs text-rose-300" style={{ boxShadow: "inset 0 0 0 1px rgba(251,113,133,0.3)" }}>
           {error}
@@ -491,7 +509,15 @@ function AccountsEditor({ client, onChanged }: { client: Client; onChanged: () =
             <div key={a.id} className="flex items-center gap-3 px-3 py-2 text-xs">
               <ProfileChip a={a} />
               {a.external_id && <span className="font-mono text-[9px] text-slate-600" title="Account ID in the posting service">{a.external_id}</span>}
-              <span className="ml-auto rounded-full bg-white/[0.06] px-2 py-0.5 text-[9px] font-semibold text-slate-400" title="Used only for scheduled posting">Posting only</span>
+              {a.platform === "threads" ? (
+                a.login_expires ? (
+                  <span className="ml-auto rounded-full bg-emerald-500/10 px-2 py-0.5 text-[9px] font-semibold text-emerald-300" title="Posts straight to Threads from this app. The login renews itself.">Connected</span>
+                ) : (
+                  <a href={`/api/threads/connect?clientId=${client.id}`} className="ml-auto rounded-full bg-amber-500/15 px-2 py-0.5 text-[9px] font-semibold text-amber-300 hover:bg-amber-500/25" title="Log in with Threads once so this app can post for the account">Connect</a>
+                )
+              ) : (
+                <span className="ml-auto rounded-full bg-white/[0.06] px-2 py-0.5 text-[9px] font-semibold text-slate-400" title="Used only for scheduled posting">Posting only</span>
+              )}
               <button onClick={() => removeProfile(a)} title="Remove" className="text-slate-500 hover:text-rose-300"><X size={12} /></button>
             </div>
           ))}
@@ -547,6 +573,15 @@ function AccountsEditor({ client, onChanged }: { client: Client; onChanged: () =
               <input value={handle} onChange={(e) => setHandle(e.target.value)} placeholder="filled by Check ID" className={inputCls} />
             </div>
           </>
+        ) : platform === "threads" ? (
+          <div>
+            <a href={`/api/threads/connect?clientId=${client.id}`} className="inline-flex items-center gap-1.5 rounded-md bg-cyan-500/15 px-4 py-2 text-xs font-semibold text-cyan-300 hover:bg-cyan-500/25">
+              <Plus size={12} /> Connect a Threads account
+            </a>
+            <p className="mt-2 text-[10px] leading-relaxed text-slate-600">
+              You log in with Threads once and approve posting. This app then posts to the account itself, with carousels and topics, and no Make.com. Use the account owner&apos;s login.
+            </p>
+          </div>
         ) : (
           <div>
             <div className={fieldLabel}>{platform === "youtube" ? "Channel name" : "Username"}</div>
@@ -574,9 +609,9 @@ function AccountsEditor({ client, onChanged }: { client: Client; onChanged: () =
               {busy === "check" ? "Checking…" : "Check ID"}
             </button>
           )}
-          <button onClick={add} disabled={!canAdd || busy !== ""} className="flex items-center gap-1 rounded-md bg-emerald-500/15 px-4 py-1.5 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/25 disabled:opacity-40">
+          {platform !== "threads" && <button onClick={add} disabled={!canAdd || busy !== ""} className="flex items-center gap-1 rounded-md bg-emerald-500/15 px-4 py-1.5 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/25 disabled:opacity-40">
             {busy === "add" ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />} Add account
-          </button>
+          </button>}
         </div>
 
         {okMsg && <div className="text-[11px] text-emerald-300">✓ {okMsg}</div>}

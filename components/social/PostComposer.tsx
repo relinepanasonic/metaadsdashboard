@@ -11,7 +11,7 @@ import {
 } from "@/lib/services/scheduler";
 
 export interface SchedOptions {
-  clients: { id: string; name: string; accounts: { id: string; platform: string; handle: string | null; externalId: string | null; removable: boolean }[] }[];
+  clients: { id: string; name: string; topics?: string[]; accounts: { id: string; platform: string; handle: string | null; externalId: string | null; removable: boolean; connected?: boolean }[] }[];
 }
 
 export interface EditablePost {
@@ -23,6 +23,7 @@ export interface EditablePost {
   scheduledAt: string;
   status: string;
   targets: { platform: string; handle: string | null; external_id: string | null }[];
+  topic?: string | null;
 }
 
 const MAX_BYTES = 50 * 1024 * 1024; // Supabase free-plan file ceiling
@@ -60,6 +61,8 @@ export default function PostComposer({ options, post, duplicate = false, onClose
   const [uploading, setUploading] = useState(0);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [topic, setTopic] = useState(post?.topic ?? ""); // Threads topic tag
+  const [newTopic, setNewTopic] = useState("");
   const [newProfile, setNewProfile] = useState<{ platform: Platform; handle: string }>({ platform: "threads", handle: "" });
   const [addingProfile, setAddingProfile] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -150,6 +153,18 @@ export default function PostComposer({ options, post, duplicate = false, onClose
     onOptionsChanged();
   }
 
+  async function addTopic() {
+    const name = newTopic.trim();
+    if (!name || !clientId) return;
+    setError("");
+    const res = await fetch("/api/threads/topics", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ clientId, name }) })
+      .then((r) => r.json()).catch(() => ({ ok: false, error: "Network error" }));
+    if (!res.ok) return setError(res.error || "Could not save the topic.");
+    setTopic(res.topic.name);
+    setNewTopic("");
+    onOptionsChanged();
+  }
+
   async function removeProfile(id: string) {
     await fetch(`/api/scheduler/profiles?id=${id}`, { method: "DELETE" });
     onOptionsChanged();
@@ -167,7 +182,7 @@ export default function PostComposer({ options, post, duplicate = false, onClose
     const res = await fetch(editing ? `/api/scheduler/posts/${post!.id}` : "/api/scheduler/posts", {
       method: editing ? "PATCH" : "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ clientId, caption, contentType, media, scheduledAt: scheduledAt.toISOString(), status, targets }),
+      body: JSON.stringify({ clientId, caption, contentType, media, scheduledAt: scheduledAt.toISOString(), status, targets, topic: targets.some((t) => t.platform === "threads") ? topic : null }),
     }).then((r) => r.json()).catch(() => ({ ok: false, error: "Network error" }));
     setSaving(false);
     if (!res.ok) return setError(res.error || "Could not save.");
@@ -238,10 +253,13 @@ export default function PostComposer({ options, post, duplicate = false, onClose
                   ) : (
                     list.map((a) => {
                       const on = picked.has(`${a.platform}|${a.handle ?? ""}`);
+                      const noLogin = a.platform === "threads" && a.connected === false; // added by hand, never logged in
+                      const locked = (Boolean(block) || noLogin) && !on;
                       return (
-                        <label key={a.id} className={`flex items-center gap-2 py-1 text-xs text-slate-200 ${block && !on ? "cursor-not-allowed" : "cursor-pointer"}`}>
-                          <input type="checkbox" checked={on} disabled={Boolean(block) && !on} onChange={() => toggle(a)} className="h-3.5 w-3.5 accent-cyan-400" />
+                        <label key={a.id} className={`flex items-center gap-2 py-1 text-xs text-slate-200 ${locked ? "cursor-not-allowed" : "cursor-pointer"}`}>
+                          <input type="checkbox" checked={on} disabled={locked} onChange={() => toggle(a)} className="h-3.5 w-3.5 accent-cyan-400" />
                           <span className="truncate">{a.handle ?? a.externalId}</span>
+                          {noLogin && <a href={`/api/threads/connect?clientId=${clientId}`} className="text-[10px] font-semibold text-amber-300 hover:underline">Connect</a>}
                           {a.removable && (
                             <button type="button" onClick={(e) => { e.preventDefault(); removeProfile(a.id); }} className="ml-auto text-slate-600 hover:text-rose-300" title="Remove this account"><Trash2 size={11} /></button>
                           )}
@@ -269,6 +287,27 @@ export default function PostComposer({ options, post, duplicate = false, onClose
             </div>
           )}
         </div>
+
+        {/* Threads topic: one tag per post, picked from the brand's saved list */}
+        {targets.some((t) => t.platform === "threads") && (
+          <div className="mt-5">
+            <span className={labelCls}>Threads topic</span>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="w-[220px]">
+                <CustomSelect
+                  size="sm"
+                  value={topic}
+                  onChange={setTopic}
+                  placeholder="No topic"
+                  options={[{ value: "", label: "No topic" }, ...(topic && !(client?.topics ?? []).includes(topic) ? [{ value: topic, label: topic }] : []), ...(client?.topics ?? []).map((t) => ({ value: t, label: t }))]}
+                />
+              </div>
+              <input value={newTopic} onChange={(e) => setNewTopic(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addTopic()} placeholder="Save a new topic…" maxLength={50} className={`${inputCls} max-w-[200px]`} />
+              <button type="button" onClick={addTopic} disabled={!newTopic.trim()} className="rounded-lg bg-cyan-500/15 px-3 py-2 text-xs font-semibold text-cyan-300 hover:bg-cyan-500/25 disabled:opacity-40">Save topic</button>
+            </div>
+            <p className="mt-1.5 text-[10px] text-slate-600">Threads allows one topic per post (up to 50 characters, no periods or &amp;).</p>
+          </div>
+        )}
 
         {/* Media */}
         {contentType !== "text" && (
