@@ -16,6 +16,16 @@ export const PUBLISH_ONLY_PLATFORMS: Platform[] = ["threads", "x", "tiktok", "yo
 // Threads straight from this app. Facebook and X are listed in the composer but locked until built.
 export const ACTIVE_PLATFORMS: Platform[] = ["instagram", "youtube", "tiktok", "threads"];
 
+// YouTube channels that have a route in the Make scenario (it matches on the handle). A channel not
+// listed would be handed to Make and never answered, so the composer locks it. Add a handle here
+// when its route is built.
+export const MAKE_YOUTUBE_HANDLES: string[] = ["@professor.toko.online"];
+
+export function accountBlock(platform: Platform, handle: string | null | undefined): string | null {
+  if (platform === "youtube" && !MAKE_YOUTUBE_HANDLES.includes((handle ?? "").toLowerCase())) return "No Make route for this channel yet";
+  return null;
+}
+
 export const PLATFORM_LABEL: Record<Platform, string> = {
   instagram: "Instagram",
   facebook: "Facebook",
@@ -52,7 +62,22 @@ export interface TargetInput {
 
 // The first line of the caption, used as the YouTube video title.
 export function titleFromCaption(caption: string): string {
-  return (caption.split(/\r?\n/).find((l) => l.trim()) ?? "").trim().slice(0, YOUTUBE_TITLE_LIMIT);
+  return youtubeSafe((caption.split(/\r?\n/).find((l) => l.trim()) ?? "").trim()).slice(0, YOUTUBE_TITLE_LIMIT);
+}
+
+// YouTube refuses a title or description containing < or > ("invalid video description"), and counts
+// the description limit in bytes, not characters. A path like "Seller Centre > Pusat Promosi" is the
+// usual culprit, so those two characters become the look-alikes ‹ and ›.
+export function youtubeSafe(text: string): string {
+  return text.replace(/</g, "‹").replace(/>/g, "›");
+}
+
+// The caption as the YouTube description, with #Shorts added so a vertical video under 3 minutes counts as a Short.
+export function youtubeDescription(caption: string): string {
+  let out = youtubeSafe(/#shorts\b/i.test(caption) ? caption : `${caption}\n\n#Shorts`.trim());
+  const enc = new TextEncoder();
+  while (enc.encode(out).length > 4900) out = out.slice(0, -50); // the limit is 5000 bytes
+  return out;
 }
 
 // Why a platform cannot be picked for this content type (shown in the composer), or null when it can.

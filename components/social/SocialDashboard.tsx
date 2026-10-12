@@ -28,6 +28,7 @@ interface Post extends Partial<PostMetrics> {
   posted_at: string | null;
   like_count: number | null;
   comments_count: number | null;
+  views?: number | null; // plays / views of the post, once Instagram has reported them
   thumbnail_url: string | null;
   media_url: string | null;
 }
@@ -737,7 +738,7 @@ export default function SocialDashboard({ canManage = true }: { canManage?: bool
                 <b className="font-semibold text-slate-400">Hook</b> first 3 seconds · <b className="font-semibold text-slate-400">Value</b> watch time &amp; saves · <b className="font-semibold text-slate-400">CTA</b> comments, shares, reposts · click a row for the full breakdown
               </p>
             </div>
-            <table className="w-full min-w-[880px] table-fixed border-collapse text-xs">
+            <table className="w-full min-w-[950px] table-fixed border-collapse text-xs">
               <colgroup>
                 <col style={{ width: 64 }} />
                 <col />
@@ -745,6 +746,7 @@ export default function SocialDashboard({ canManage = true }: { canManage?: bool
                 <col style={{ width: 66 }} />
                 <col style={{ width: 66 }} />
                 <col style={{ width: 66 }} />
+                <col style={{ width: 72 }} />
                 <col style={{ width: 64 }} />
                 <col style={{ width: 88 }} />
               </colgroup>
@@ -756,6 +758,7 @@ export default function SocialDashboard({ canManage = true }: { canManage?: bool
                   <th className="px-1 pb-2.5 text-center font-semibold">Hook</th>
                   <th className="px-1 pb-2.5 text-center font-semibold">Value</th>
                   <th className="px-1 pb-2.5 text-center font-semibold">CTA</th>
+                  <th className="px-2 pb-2.5 text-right font-semibold">Views</th>
                   <th className="px-2 pb-2.5 text-right font-semibold">Likes</th>
                   <th className="px-2 pb-2.5 text-right font-semibold">Comments</th>
                 </tr>
@@ -763,7 +766,7 @@ export default function SocialDashboard({ canManage = true }: { canManage?: bool
               <tbody>
                 {topPosts.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-3 py-6 text-center text-slate-500">No posts stored for this range. Posts need the Instagram permission described above.</td>
+                    <td colSpan={9} className="px-3 py-6 text-center text-slate-500">No posts stored for this range. Posts need the Instagram permission described above.</td>
                   </tr>
                 ) : (
                   topPosts.map((p) => {
@@ -788,6 +791,7 @@ export default function SocialDashboard({ canManage = true }: { canManage?: bool
                         <td className="px-1 py-3 text-center align-middle"><SignalCell v={v.hook} reel={v.applicable} early={v.tooEarly} /></td>
                         <td className="px-1 py-3 text-center align-middle"><SignalCell v={v.value} reel={v.applicable} early={v.tooEarly} /></td>
                         <td className="px-1 py-3 text-center align-middle"><SignalCell v={v.cta} reel={v.applicable} early={v.tooEarly} /></td>
+                        <td className="px-2 py-3 text-right align-middle tabular-nums text-slate-200">{p.views != null ? formatNumber(p.views) : dash}</td>
                         <td className="px-2 py-3 text-right align-middle tabular-nums text-slate-200">{p.like_count != null ? formatNumber(p.like_count) : dash}</td>
                         <td className="px-2 py-3 text-right align-middle tabular-nums text-slate-200">{p.comments_count != null ? formatNumber(p.comments_count) : dash}</td>
                       </tr>

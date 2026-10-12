@@ -6,7 +6,7 @@ import { AlertTriangle, ImagePlus, Loader2, Plus, Trash2, X } from "lucide-react
 import CustomSelect from "@/components/CustomSelect";
 import { createClient } from "@/lib/supabase/client";
 import {
-  CAPTION_LIMIT, CONTENT_LABEL, PLATFORM_LABEL, PLATFORMS, PUBLISH_ONLY_PLATFORMS, platformBlock, validatePost,
+  CAPTION_LIMIT, CONTENT_LABEL, PLATFORM_LABEL, PLATFORMS, PUBLISH_ONLY_PLATFORMS, accountBlock, platformBlock, validatePost,
   type ContentType, type MediaItem, type Platform,
 } from "@/lib/services/scheduler";
 
@@ -254,11 +254,13 @@ export default function PostComposer({ options, post, duplicate = false, onClose
                     list.map((a) => {
                       const on = picked.has(`${a.platform}|${a.handle ?? ""}`);
                       const noLogin = a.platform === "threads" && a.connected === false; // added by hand, never logged in
-                      const locked = (Boolean(block) || noLogin) && !on;
+                      const accBlock = accountBlock(a.platform as Platform, a.handle);
+                      const locked = (Boolean(block) || noLogin || Boolean(accBlock)) && !on;
                       return (
                         <label key={a.id} className={`flex items-center gap-2 py-1 text-xs text-slate-200 ${locked ? "cursor-not-allowed" : "cursor-pointer"}`}>
                           <input type="checkbox" checked={on} disabled={locked} onChange={() => toggle(a)} className="h-3.5 w-3.5 accent-cyan-400" />
                           <span className="truncate">{a.handle ?? a.externalId}</span>
+                          {accBlock && <span className="text-[10px] text-slate-500">🔒 {accBlock}</span>}
                           {noLogin && <a href={`/api/threads/connect?clientId=${clientId}`} className="text-[10px] font-semibold text-amber-300 hover:underline">Connect</a>}
                           {a.removable && (
                             <button type="button" onClick={(e) => { e.preventDefault(); removeProfile(a.id); }} className="ml-auto text-slate-600 hover:text-rose-300" title="Remove this account"><Trash2 size={11} /></button>

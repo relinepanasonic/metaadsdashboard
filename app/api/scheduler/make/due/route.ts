@@ -2,7 +2,7 @@ import { NextRequest, NextResponse, after } from "next/server";
 import { publishDueThreads } from "@/lib/services/threadsRunner";
 import { db } from "@/lib/supabase/db";
 import { schedulerAuthorized, schedulerConfigured } from "@/lib/services/schedulerAuth";
-import { titleFromCaption, type MediaItem } from "@/lib/services/scheduler";
+import { accountBlock, titleFromCaption, youtubeDescription, type MediaItem, type Platform } from "@/lib/services/scheduler";
 
 export const maxDuration = 60;
 
@@ -84,8 +84,17 @@ async function handle(req: NextRequest) {
   if (tErr) return NextResponse.json({ ok: false, error: tErr.message }, { status: 500 });
 
   const byPost = new Map(posts.map((p) => [p.id, p]));
+  // A YouTube channel with no route in Make would be claimed and never answered: fail it now with the reason.
+  const unrouted = (targets ?? []).filter((t) => accountBlock(t.platform as Platform, t.handle));
+  if (unrouted.length > 0) {
+    await db
+      .from("scheduled_post_targets")
+      .update({ status: "failed", error: "This YouTube channel has no route in Make yet, so nothing was sent. Add its route in Make, then press Retry." })
+      .in("id", unrouted.map((t) => t.id))
+      .eq("status", "pending");
+  }
   const ordered = (targets ?? [])
-    .filter((t) => byPost.has(t.post_id))
+    .filter((t) => byPost.has(t.post_id) && !accountBlock(t.platform as Platform, t.handle))
     .sort((a, b) => Date.parse(byPost.get(a.post_id)!.scheduled_at) - Date.parse(byPost.get(b.post_id)!.scheduled_at))
     .slice(0, limit);
 
@@ -117,7 +126,7 @@ async function handle(req: NextRequest) {
       caption: p.caption,
       title: titleFromCaption(p.caption), // first line, for YouTube
       // YouTube: the caption as the description, with #Shorts added so a vertical video under 3 minutes is treated as a Short
-      description: /#shorts\b/i.test(p.caption) ? p.caption : `${p.caption}\n\n#Shorts`.trim(),
+      description: youtubeDescription(p.caption),
       media,
       mediaUrl: media[0]?.url ?? null, // handy for single photo / video posts
       mediaUrls: media.map((m) => m.url),
