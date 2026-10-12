@@ -19,7 +19,7 @@ export const ACTIVE_PLATFORMS: Platform[] = ["instagram", "youtube", "tiktok", "
 // YouTube channels that have a route in the Make scenario (it matches on the handle). A channel not
 // listed would be handed to Make and never answered, so the composer locks it. Add a handle here
 // when its route is built.
-export const MAKE_YOUTUBE_HANDLES: string[] = ["@professor.toko.online"];
+export const MAKE_YOUTUBE_HANDLES: string[] = ["@professor.toko.online", "@relinepanasonic"];
 
 export function accountBlock(platform: Platform, handle: string | null | undefined): string | null {
   if (platform === "youtube" && !MAKE_YOUTUBE_HANDLES.includes((handle ?? "").toLowerCase())) return "No Make route for this channel yet";
