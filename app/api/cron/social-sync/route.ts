@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { loadAccounts, syncAccounts } from "@/lib/services/socialSync";
 import { syncAllGoogleAccounts } from "@/lib/services/googleAds";
 import { publishDueThreads, renewThreadsTokens } from "@/lib/services/threadsRunner";
+import { publishDueFacebook } from "@/lib/services/facebookRunner";
 
 export const maxDuration = 300;
 
@@ -22,7 +23,7 @@ export async function GET(req: NextRequest) {
       loadAccounts().then((rows) => syncAccounts(rows, 7)),
       syncAllGoogleAccounts(),
       // also keeps the Threads logins fresh, and publishes any Threads post that is due
-      renewThreadsTokens().then(() => publishDueThreads()),
+      renewThreadsTokens().then(() => Promise.all([publishDueThreads(), publishDueFacebook()])),
     ]);
     return NextResponse.json({
       ok: social.status === "fulfilled",

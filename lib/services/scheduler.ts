@@ -13,8 +13,8 @@ export const PLATFORMS: Platform[] = ["instagram", "facebook", "threads", "x", "
 export const PUBLISH_ONLY_PLATFORMS: Platform[] = ["threads", "x", "tiktok", "youtube"];
 
 // Platforms that can actually be posted to: Instagram, YouTube and TikTok through Make.com, and
-// Threads straight from this app. Facebook and X are listed in the composer but locked until built.
-export const ACTIVE_PLATFORMS: Platform[] = ["instagram", "youtube", "tiktok", "threads"];
+// Threads and Facebook Pages straight from this app. X is listed in the composer but locked until built.
+export const ACTIVE_PLATFORMS: Platform[] = ["instagram", "youtube", "tiktok", "threads", "facebook"];
 
 // YouTube channels that have a route in the Make scenario (it matches on the handle). A channel not
 // listed would be handed to Make and never answered, so the composer locks it. Add a handle here
@@ -85,7 +85,7 @@ export function platformBlock(platform: Platform, contentType: ContentType): str
   if (!ACTIVE_PLATFORMS.includes(platform)) return "Not set up in Make yet";
   if (contentType === "text" && (platform === "instagram" || platform === "tiktok" || platform === "youtube")) return "Needs a photo or video";
   if (contentType === "image" && (platform === "tiktok" || platform === "youtube")) return "Needs a video";
-  if (contentType === "carousel" && (platform === "tiktok" || platform === "facebook" || platform === "youtube")) return "No carousels";
+  if (contentType === "carousel" && (platform === "tiktok" || platform === "youtube")) return "No carousels";
   return null;
 }
 
@@ -109,8 +109,9 @@ export function validatePost(input: { contentType: ContentType; media: MediaItem
     if (images !== 1 || videos > 0) return "Add exactly one photo.";
   } else if (contentType === "carousel") {
     if (media.length < 2 || media.length > 10) return "A carousel needs 2 to 10 photos or videos.";
-    const bad = targets.find((t) => t.platform === "tiktok" || t.platform === "facebook" || t.platform === "youtube");
+    const bad = targets.find((t) => t.platform === "tiktok" || t.platform === "youtube");
     if (bad) return `${PLATFORM_LABEL[bad.platform]} does not take carousels here — remove it, or post a single photo or video.`;
+    if (has("facebook") && videos > 0) return "Facebook posts several photos in one post but not videos — remove Facebook or use photos only.";
     if (has("x") && (media.length > 4 || videos > 0)) return "X takes up to 4 photos in one post (no videos in a set) — remove X or trim the photos.";
   }
 
