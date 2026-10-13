@@ -14,6 +14,16 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export const THREADS_TOPIC_LIMIT = 50;
 
+// Values pasted into Vercel often carry a stray space, newline or quote; strip them.
+const clean = (v: string | undefined) => (v ?? "").trim().replace(/^["']|["']$/g, "").trim();
+const appId = () => clean(process.env.THREADS_APP_ID);
+const appSecret = () => clean(process.env.THREADS_APP_SECRET);
+
+// The address Threads sends the person back to. It must match the one saved in the Meta app exactly.
+export function redirectUriFor(origin: string): string {
+  return clean(process.env.THREADS_REDIRECT_URI) || `${origin}/api/threads/callback`;
+}
+
 export function threadsConfigured(): boolean {
   return Boolean(process.env.THREADS_APP_ID && process.env.THREADS_APP_SECRET && process.env.SCHEDULER_SECRET);
 }
@@ -57,7 +67,7 @@ export function readState(state: string): { clientId: string } | null {
 // ---- OAuth ------------------------------------------------------------------------------------------------------------
 export function authorizeUrl(redirectUri: string, state: string): string {
   const q = new URLSearchParams({
-    client_id: process.env.THREADS_APP_ID ?? "",
+    client_id: appId(),
     redirect_uri: redirectUri,
     scope: "threads_basic,threads_content_publish",
     response_type: "code",
@@ -86,15 +96,15 @@ export async function connectWithCode(code: string, redirectUri: string): Promis
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
-      client_id: process.env.THREADS_APP_ID ?? "",
-      client_secret: process.env.THREADS_APP_SECRET ?? "",
+      client_id: appId(),
+      client_secret: appSecret(),
       grant_type: "authorization_code",
       redirect_uri: redirectUri,
       code,
     }),
   });
   const long = await call<{ access_token: string; expires_in: number }>(
-    `${OAUTH}/access_token?${new URLSearchParams({ grant_type: "th_exchange_token", client_secret: process.env.THREADS_APP_SECRET ?? "", access_token: short.access_token })}`
+    `${OAUTH}/access_token?${new URLSearchParams({ grant_type: "th_exchange_token", client_secret: appSecret(), access_token: short.access_token })}`
   );
   const me = await call<{ id: string; username: string }>(`${API}/me?${new URLSearchParams({ fields: "id,username", access_token: long.access_token })}`);
   return { userId: String(me.id), username: me.username, token: long.access_token, expiresAt: new Date(Date.now() + long.expires_in * 1000).toISOString() };

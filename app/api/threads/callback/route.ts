@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/supabase/db";
-import { connectWithCode, encryptToken, readState, threadsConfigured } from "@/lib/services/threads";
+import { connectWithCode, encryptToken, readState, redirectUriFor, threadsConfigured } from "@/lib/services/threads";
 
 // Threads sends the person back here after they log in and approve.
 export async function GET(req: NextRequest) {
@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
   if (!state || !code) return back("That login link has expired — start again from the Clients page.");
 
   try {
-    const acct = await connectWithCode(code.replace(/#_$/, ""), `${req.nextUrl.origin}/api/threads/callback`);
+    const acct = await connectWithCode(code.replace(/#_$/, ""), redirectUriFor(req.nextUrl.origin));
     const handle = `@${acct.username}`;
     const { error } = await db.from("publish_profiles").upsert(
       { client_id: state.clientId, platform: "threads", handle, external_id: acct.userId, access_token: encryptToken(acct.token), token_expires_at: acct.expiresAt },
