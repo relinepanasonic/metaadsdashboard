@@ -20,8 +20,10 @@ export interface AiResult {
   fellBackBecause?: string; // why Claude was skipped, when Qwen answered
 }
 
+// The fallback model is reached through OpenRouter (one key, many models) or, if that is not set,
+// straight through Alibaba Cloud's DashScope. Both speak the same OpenAI-style chat API.
 export function qwenConfigured(): boolean {
-  return Boolean(process.env.DASHSCOPE_API_KEY);
+  return Boolean(process.env.OPENROUTER_API_KEY || process.env.DASHSCOPE_API_KEY);
 }
 
 async function askClaude(req: AiRequest): Promise<string> {
@@ -45,14 +47,15 @@ async function askClaude(req: AiRequest): Promise<string> {
 export class RefusalError extends Error {}
 
 async function askQwen(req: AiRequest): Promise<string> {
-  const key = process.env.DASHSCOPE_API_KEY;
-  if (!key) throw new Error("DASHSCOPE_API_KEY is not set");
-  const base = (process.env.QWEN_BASE_URL || "https://dashscope-intl.aliyuncs.com/compatible-mode/v1").replace(/\/$/, "");
+  const viaOpenRouter = Boolean(process.env.OPENROUTER_API_KEY);
+  const key = process.env.OPENROUTER_API_KEY || process.env.DASHSCOPE_API_KEY;
+  if (!key) throw new Error("Neither OPENROUTER_API_KEY nor DASHSCOPE_API_KEY is set");
+  const base = (process.env.QWEN_BASE_URL || (viaOpenRouter ? "https://openrouter.ai/api/v1" : "https://dashscope-intl.aliyuncs.com/compatible-mode/v1")).replace(/\/$/, "");
   const res = await fetch(`${base}/chat/completions`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
     body: JSON.stringify({
-      model: process.env.QWEN_MODEL || "qwen-plus",
+      model: process.env.QWEN_MODEL || (viaOpenRouter ? "qwen/qwen3.7-plus" : "qwen-plus"),
       max_tokens: Math.min(req.maxTokens, 8000),
       messages: [
         { role: "system", content: req.system },

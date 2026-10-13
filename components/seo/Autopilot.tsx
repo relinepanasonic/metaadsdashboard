@@ -141,7 +141,7 @@ export default function Autopilot() {
         <Bot size={16} className="text-cyan-300" />
         <span className="font-semibold text-slate-200">AI writer</span>
         <span className={data.ai.claude ? "text-emerald-300" : "text-rose-300"}>● Claude {data.ai.claude ? "ready (default)" : "key missing"}</span>
-        <span className={data.ai.qwen ? "text-emerald-300" : "text-slate-500"}>● Qwen {data.ai.qwen ? "ready (used when Claude is unavailable)" : "not set — add DASHSCOPE_API_KEY in Vercel to enable the fallback"}</span>
+        <span className={data.ai.qwen ? "text-emerald-300" : "text-slate-500"}>● Qwen {data.ai.qwen ? "ready (used when Claude is unavailable)" : "not set — add OPENROUTER_API_KEY in Vercel to enable the fallback"}</span>
         <span className="ml-auto text-slate-500">Workspace: <b className="text-slate-300">{brandName}</b></span>
       </div>
 
