@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Factory, Link2, Upload } from "lucide-react";
+import { Bot, Factory, Link2, Upload } from "lucide-react";
 import { useSeoSite } from "./SeoSiteProvider";
 
 // The three parts of the Blog Engine. A client login only sees the Content Engine (published posts).
@@ -10,6 +10,7 @@ const SUB_TABS = [
   { href: "/seo/blog/connection", label: "Connection 2 Web", icon: Link2, staffOnly: true },
   { href: "/seo/blog/content", label: "Content Engine", icon: Factory, staffOnly: false },
   { href: "/seo/blog/uploader", label: "Blog Uploader", icon: Upload, staffOnly: true },
+  { href: "/seo/blog/autopilot", label: "Autopilot", icon: Bot, staffOnly: true },
 ];
 
 export default function BlogSubTabs() {

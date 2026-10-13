@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/supabase/db";
 import { publishSavedKeyword, PublishError } from "@/lib/services/publishKeyword";
+import { runAllAutopilots } from "@/lib/services/autopilot";
 
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 // Runs daily at 02:00 UTC / 09:00 WIB (see vercel.json; Hobby plan allows daily crons only). For every site with an auto-publish cadence
 // set, publishes the oldest approved post once enough time has passed since
@@ -13,6 +14,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }
   if (!db) return NextResponse.json({ ok: true, results: [] });
+
+  // The daily autopilot (one blog post + one Threads post a day, where switched on) runs first.
+  const autopilot = await runAllAutopilots().catch((e) => [{ key: "autopilot", ok: false, message: String(e) }]);
 
   const { data: sites, error } = await db
     .from("search_console_sites")
@@ -61,5 +65,5 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ ok: true, results });
+  return NextResponse.json({ ok: true, results, autopilot });
 }

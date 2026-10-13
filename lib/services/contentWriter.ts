@@ -1,5 +1,5 @@
-import Anthropic from "@anthropic-ai/sdk";
 import { fetchSerpTop10 } from "./dataforseo";
+import { aiComplete, parseJsonAnswer, type Provider } from "./ai";
 import { FIRSTHAND_MARKER, MODEL_OPTIONS, DEFAULT_MODEL, type ModelId } from "@/lib/seo/constants";
 
 // The website template maps these to CSS classes — they must stay exactly these
@@ -13,18 +13,29 @@ export interface Draft {
   excerpt: string;
   bodyHtml: string;
   tag: string;
+  provider?: Provider; // which model wrote it (Claude, or Qwen when Claude was unavailable)
+  fellBackBecause?: string;
 }
 
-const SYSTEM = `Kamu penulis konten untuk "Profesor Toko Online", konsultan optimasi e-commerce di Indonesia (sejak 2021), melayani seller Shopee, TikTok Shop, dan Tokopedia. Layanan: optimasi toko, friend order, editing foto/video produk, rekrutmen TikTok affiliate.
+function systemPrompt(autopilot: boolean): string {
+  return SYSTEM_BASE.replace("__RULE5__", autopilot ? RULE5_AUTOPILOT : RULE5_MANUAL);
+}
+
+const RULE5_MANUAL = `5. Artikel HARUS memuat tepat satu bagian <h2>Dari Pengalaman Kami</h2> yang isinya persis satu paragraf placeholder:
+   <p>${FIRSTHAND_MARKER} — contoh nyata dari toko yang kamu tangani, angka asli, atau kesalahan yang sering kamu temui]</p>
+   Jangan diisi sendiri. Biarkan persis seperti itu.`;
+
+// Unattended posts have nobody to fill in real experience, and the model must not invent it, so the section is simply left out.
+const RULE5_AUTOPILOT = `5. JANGAN menulis bagian "Dari Pengalaman Kami" dan JANGAN mengaku punya pengalaman pribadi, klien, atau hasil nyata. Tulis panduan praktis berbasis prinsip yang umum diketahui.`;
+
+const SYSTEM_BASE = `Kamu penulis konten untuk "Profesor Toko Online", konsultan optimasi e-commerce di Indonesia (sejak 2021), melayani seller Shopee, TikTok Shop, dan Tokopedia. Layanan: optimasi toko, friend order, editing foto/video produk, rekrutmen TikTok affiliate.
 
 ATURAN YANG TIDAK BOLEH DILANGGAR:
 1. Tulis SELURUHNYA dalam Bahasa Indonesia yang natural — bukan terjemahan kaku dari Inggris.
 2. JANGAN mengarang statistik, persentase, angka pasar, atau nilai GMV. Kalau sebuah klaim butuh angka yang tidak kamu ketahui pasti, tulis kalimatnya tanpa angka.
 3. JANGAN mengarang studi kasus, hasil klien, testimoni, atau nama brand. Dilarang keras menulis "toko X naik 3.5x" kalau datanya tidak diberikan.
 4. JANGAN menyebut regulasi/hukum kecuali kamu yakin namanya benar. Undang-undang perlindungan data Indonesia adalah UU PDP (UU No. 27/2022) — BUKAN "PDPA".
-5. Artikel HARUS memuat tepat satu bagian <h2>Dari Pengalaman Kami</h2> yang isinya persis satu paragraf placeholder:
-   <p>${FIRSTHAND_MARKER} — contoh nyata dari toko yang kamu tangani, angka asli, atau kesalahan yang sering kamu temui]</p>
-   Jangan diisi sendiri. Biarkan persis seperti itu.
+__RULE5__
 
 Gaya: percaya diri, langsung, berbasis data, tanpa basa-basi, premium tapi membumi.
 
@@ -49,8 +60,7 @@ function cleanSlug(raw: string): string {
   return s.slice(0, 60).replace(/-[^-]*$/, "");
 }
 
-export async function draftPost(keyword: string, modelId: ModelId = DEFAULT_MODEL): Promise<Draft> {
-  if (!process.env.ANTHROPIC_API_KEY) throw new Error("ANTHROPIC_API_KEY is not set");
+export async function draftPost(keyword: string, modelId: ModelId = DEFAULT_MODEL, opts: { autopilot?: boolean } = {}): Promise<Draft> {
   const model = MODEL_OPTIONS.find((m) => m.id === modelId) ?? MODEL_OPTIONS[0];
 
   // Give Claude the live top 10 so it writes against what actually ranks today
@@ -68,38 +78,19 @@ export async function draftPost(keyword: string, modelId: ModelId = DEFAULT_MODE
     // SERP is context, not a requirement.
   }
 
-  const client = new Anthropic();
-  const response = await client.messages.create({
-    model: model.id,
-    max_tokens: 16000,
-    ...(model.adaptiveThinking ? { thinking: { type: "adaptive" as const } } : {}),
-    system: SYSTEM,
-    messages: [
-      {
-        role: "user",
-        content: `Tulis satu artikel blog yang menargetkan kata kunci: "${keyword}".${serpContext}`,
-      },
-    ],
+  const answer = await aiComplete({
+    system: systemPrompt(Boolean(opts.autopilot)),
+    user: `Tulis satu artikel blog yang menargetkan kata kunci: "${keyword}".${serpContext}`,
+    maxTokens: 16000,
+    claudeModel: model.id,
+    adaptiveThinking: model.adaptiveThinking,
   });
-
-  if (response.stop_reason === "refusal") {
-    throw new Error("Claude menolak permintaan ini. Coba kata kunci lain.");
-  }
-
-  const text = response.content
-    .filter((b): b is Anthropic.TextBlock => b.type === "text")
-    .map((b) => b.text)
-    .join("")
-    .trim();
-
-  // The model is told not to fence, but strip one if it appears anyway.
-  const json = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
 
   let draft: Draft;
   try {
-    draft = JSON.parse(json) as Draft;
+    draft = parseJsonAnswer<Draft>(answer.text);
   } catch {
-    throw new Error("Claude tidak mengembalikan JSON valid.");
+    throw new Error("Model tidak mengembalikan JSON valid.");
   }
 
   for (const key of ["title", "slug", "metaDescription", "excerpt", "bodyHtml", "tag"] as const) {
@@ -108,6 +99,8 @@ export async function draftPost(keyword: string, modelId: ModelId = DEFAULT_MODE
 
   draft.slug = cleanSlug(draft.slug);
   if (!TAGS.includes(draft.tag as (typeof TAGS)[number])) draft.tag = "Optimization";
+  draft.provider = answer.provider;
+  draft.fellBackBecause = answer.fellBackBecause;
 
   return draft;
 }
