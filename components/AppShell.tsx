@@ -2,6 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import Sidebar from "./Sidebar";
+import WorkspaceProvider from "./WorkspaceProvider";
 
 const NO_SIDEBAR_PREFIXES = ["/login", "/forgot-password", "/reset-password", "/setup", "/invite/"];
 
@@ -12,9 +13,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   if (bare) return <>{children}</>;
 
   return (
-    <div className="flex min-h-screen">
-      <Sidebar />
-      <div className="min-w-0 flex-1">{children}</div>
-    </div>
+    <WorkspaceProvider>
+      <div className="flex min-h-screen">
+        <Sidebar />
+        <div className="min-w-0 flex-1">{children}</div>
+      </div>
+    </WorkspaceProvider>
   );
 }

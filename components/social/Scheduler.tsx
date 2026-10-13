@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, CalendarClock, CheckCircle2, Clock, Copy, Film, ImageIcon, Loader2, Pencil, Plug, Plus, RotateCcw, Send, Trash2, XCircle } from "lucide-react";
 import PostComposer, { type EditablePost, type SchedOptions } from "./PostComposer";
 import MakeSetup from "./MakeSetup";
+import { useWorkspace } from "@/components/WorkspaceProvider";
 import { CONTENT_LABEL, PLATFORM_LABEL, postState, type ContentType, type MediaItem, type Platform, type PostState, type TargetStatus } from "@/lib/services/scheduler";
 
 interface Target {
@@ -129,7 +130,12 @@ export default function Scheduler() {
     setBusy("");
   }
 
-  const withState = useMemo(() => posts.map((p) => ({ p, state: postState(p.status, p.targets) })), [posts]);
+  // Only the current workspace's posts (a Client login is already limited to its own by the API).
+  const workspace = useWorkspace();
+  const withState = useMemo(
+    () => posts.filter((p) => !workspace.workspaceId || p.clientId === workspace.workspaceId).map((p) => ({ p, state: postState(p.status, p.targets) })),
+    [posts, workspace.workspaceId]
+  );
 
   const counts = useMemo(() => {
     const c = { upcoming: 0, published: 0, attention: 0, drafts: 0, all: withState.length };

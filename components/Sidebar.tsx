@@ -18,6 +18,8 @@ import {
   Camera,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import CustomSelect from "./CustomSelect";
+import { useWorkspace } from "./WorkspaceProvider";
 
 interface NavItem {
   label: string;
@@ -75,6 +77,7 @@ export default function Sidebar() {
   const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
   const [me, setMe] = useState<Me | null>(null);
+  const ws = useWorkspace();
 
   useEffect(() => {
     fetch("/api/me")
@@ -155,6 +158,27 @@ export default function Sidebar() {
           </div>
         )}
       </div>
+
+      {/* Workspace = the client you are working in. Pages that work per client follow it. */}
+      {!ws.isClient && ws.workspaces.length > 0 && (
+        <div className="px-3 pb-2">
+          {collapsed ? (
+            <button
+              onClick={() => setCollapsed(false)}
+              title={`Workspace: ${ws.workspace?.name ?? ""}`}
+              className="mx-auto grid h-9 w-9 place-items-center rounded-lg bg-cyan-500/10 text-xs font-black text-cyan-300"
+              style={{ boxShadow: "inset 0 0 0 1px rgba(34,211,238,0.3)" }}
+            >
+              {(ws.workspace?.name ?? "?").slice(0, 2).toUpperCase()}
+            </button>
+          ) : (
+            <>
+              <div className="px-1 pb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-600">Workspace</div>
+              <CustomSelect size="sm" value={ws.workspaceId} onChange={ws.setWorkspace} options={ws.workspaces.map((w) => ({ value: w.id, label: w.name }))} />
+            </>
+          )}
+        </div>
+      )}
 
       {/* Main nav */}
       <nav className="flex flex-1 flex-col gap-1 px-3 py-2">

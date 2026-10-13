@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { AlertTriangle, ImagePlus, Loader2, Plus, Trash2, X } from "lucide-react";
 import CustomSelect from "@/components/CustomSelect";
 import { createClient } from "@/lib/supabase/client";
+import { useWorkspace } from "@/components/WorkspaceProvider";
 import {
   CAPTION_LIMIT, CONTENT_LABEL, PLATFORM_LABEL, PLATFORMS, PUBLISH_ONLY_PLATFORMS, accountBlock, platformBlock, validatePost,
   type ContentType, type MediaItem, type Platform,
@@ -51,7 +52,8 @@ export default function PostComposer({ options, post, duplicate = false, onClose
 }) {
   const editing = Boolean(post) && !duplicate;
   const init = wibParts(editing ? post!.scheduledAt : null);
-  const [clientId, setClientId] = useState(post?.clientId ?? options.clients[0]?.id ?? "");
+  const workspace = useWorkspace();
+  const [clientId, setClientId] = useState(post?.clientId ?? (options.clients.some((c) => c.id === workspace.workspaceId) ? workspace.workspaceId : options.clients[0]?.id) ?? "");
   const [contentType, setContentType] = useState<ContentType>(post?.contentType ?? "reel");
   const [media, setMedia] = useState<MediaItem[]>(post?.media ?? []);
   const [caption, setCaption] = useState(post?.caption ?? "");

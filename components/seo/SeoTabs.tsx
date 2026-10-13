@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, SearchCode, Factory, Sparkles, Wrench, Bookmark } from "lucide-react";
+import { LayoutDashboard, SearchCode, Factory, Sparkles, Wrench, Bookmark, Globe2 } from "lucide-react";
+import CustomSelect from "@/components/CustomSelect";
 import { useSeoSite } from "./SeoSiteProvider";
 
 // Tabs a client can open. Research runs paid keyword lookups; GEO and Technical
@@ -20,7 +21,7 @@ const TABS = [
 
 export default function SeoTabs() {
   const pathname = usePathname();
-  const { isClient } = useSeoSite();
+  const { isClient, sitesForSelectedBrand, selected, setSelected, loading } = useSeoSite();
   const tabs = isClient ? TABS.filter((t) => CLIENT_TABS.has(t.href)) : TABS;
 
   return (
@@ -45,6 +46,13 @@ export default function SeoTabs() {
           </Link>
         );
       })}
+      {/* Which of this workspace's websites the page below is about. (The Dashboard has its own picker in its filter bar.) */}
+      {!loading && pathname !== "/seo" && sitesForSelectedBrand.length > 1 && (
+        <div className="ml-auto flex items-center gap-2 pr-1">
+          <Globe2 size={14} className="shrink-0 text-slate-500" />
+          <CustomSelect size="sm" className="min-w-[190px]" value={selected} onChange={setSelected} options={sitesForSelectedBrand.map((s) => ({ value: s.id, label: s.label }))} />
+        </div>
+      )}
     </div>
   );
 }

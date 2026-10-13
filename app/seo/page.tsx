@@ -34,7 +34,7 @@ function monthLabel(ym: string): string {
 }
 
 export default function SeoDashboardPage() {
-  const { sites, selectedSite, loading: loadingSites, isClient } = useSeoSite();
+  const { sites, selectedSite, setSelected: setGlobalSite, loading: loadingSites, isClient } = useSeoSite();
   const gscSites = useMemo(() => sites.filter((s) => s.status === "connected"), [sites]);
   const [selected, setSelected] = useState<string>("");
   const [data, setData] = useState<AnalyticsResponse | null>(null);
@@ -149,7 +149,7 @@ export default function SeoDashboardPage() {
             <CustomSelect
               className="min-w-[180px]"
               value={selected}
-              onChange={setSelected}
+              onChange={(id) => { setSelected(id); setGlobalSite(id); }}
               options={gscSites.map((s) => ({ value: s.id, label: s.label }))}
             />
           )}
