@@ -7,7 +7,7 @@
 import { db } from "@/lib/supabase/db";
 import { FIRSTHAND_MARKER, isValidModelId, type ModelId } from "@/lib/seo/constants";
 import { draftPost } from "./contentWriter";
-import { aiComplete, parseJsonAnswer } from "./ai";
+import { aiComplete, cleanPostText } from "./ai";
 import { publishSavedKeyword } from "./publishKeyword";
 import { cleanTopic } from "./threads";
 
@@ -95,7 +95,7 @@ ATURAN:
 4. Awali dengan kalimat pembuka yang menarik perhatian, akhiri dengan pertanyaan atau ajakan singkat.
 5. Tiru GAYA dan struktur contoh yang diberikan, tapi jangan menyalin kalimatnya dan jangan mengulang topik postingan sebelumnya.
 
-Balas HANYA dengan satu objek JSON valid: {"text": "isi postingan"}`;
+Balas HANYA dengan isi postingan itu sendiri: tanpa JSON, tanpa tanda kutip pembungkus, tanpa judul atau penjelasan.`;
 
 export async function runThreads(s: AutopilotSetting, opts: { preview?: boolean; now?: boolean } = {}): Promise<RunResult> {
   if (!db || !s.client_id || !s.handle) return { ok: false, message: "No Threads account selected." };
@@ -154,12 +154,7 @@ export async function runThreads(s: AutopilotSetting, opts: { preview?: boolean;
     (recent?.length ? `\nPostingan sebelumnya (jangan ulangi topiknya):\n${recent.map((r) => `- ${String(r.caption).slice(0, 120)}`).join("\n")}\n` : "");
 
   const answer = await aiComplete({ system: THREADS_SYSTEM, user, maxTokens: 800, claudeModel: "claude-sonnet-5" });
-  let text: string;
-  try {
-    text = parseJsonAnswer<{ text: string }>(answer.text).text?.trim();
-  } catch {
-    text = answer.text.trim();
-  }
+  let text = cleanPostText(answer.text);
   if (!text) return { ok: false, message: "The model returned no text." };
   if (text.length > 500) text = text.slice(0, 497).replace(/\s+\S*$/, "") + "…";
   const by = answer.provider === "qwen" ? ` (written by Qwen because Claude was unavailable: ${answer.fellBackBecause ?? "error"})` : "";

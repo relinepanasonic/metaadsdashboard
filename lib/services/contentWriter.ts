@@ -1,5 +1,5 @@
 import { fetchSerpTop10 } from "./dataforseo";
-import { aiComplete, parseJsonAnswer, type Provider } from "./ai";
+import { aiComplete, parseJsonAnswer, parseSections, type Provider } from "./ai";
 import { FIRSTHAND_MARKER, MODEL_OPTIONS, DEFAULT_MODEL, type ModelId } from "@/lib/seo/constants";
 
 // The website template maps these to CSS classes — they must stay exactly these
@@ -39,15 +39,19 @@ __RULE5__
 
 Gaya: percaya diri, langsung, berbasis data, tanpa basa-basi, premium tapi membumi.
 
-Balas HANYA dengan satu objek JSON valid (tanpa markdown fence, tanpa komentar) dengan bentuk persis:
-{
-  "title": "string, menarik, di bawah 70 karakter, Bahasa Indonesia",
-  "slug": "string, huruf kecil-kebab-case, url-safe, di bawah 60 karakter, potong di batas kata",
-  "metaDescription": "string, di bawah 155 karakter, mengandung kata kunci utama",
-  "excerpt": "string, 1 kalimat, di bawah 140 karakter",
-  "bodyHtml": "string HTML semantik bersih — hanya tag <p>, <h2>, <ul>, <li>, <ol>, <strong>, <em>. 800-1200 kata. Tanpa wrapper <html>/<head>/<body>, tanpa inline style, tanpa gambar",
-  "tag": "salah satu dari: ${TAGS.join(" | ")}"
-}`;
+Balas HANYA dengan bagian-bagian berikut, masing-masing diawali baris penanda persis seperti ini (BUKAN JSON, tanpa markdown fence, tanpa komentar di luar bagian):
+===TITLE===
+judul menarik, di bawah 70 karakter, Bahasa Indonesia
+===SLUG===
+huruf kecil-kebab-case, url-safe, di bawah 60 karakter, potong di batas kata
+===META===
+di bawah 155 karakter, mengandung kata kunci utama
+===EXCERPT===
+1 kalimat, di bawah 140 karakter
+===TAG===
+salah satu dari: ${TAGS.join(" | ")}
+===BODY===
+HTML semantik bersih — hanya tag <p>, <h2>, <ul>, <li>, <ol>, <strong>, <em>. 800-1200 kata. Tanpa wrapper <html>/<head>/<body>, tanpa inline style, tanpa gambar. Boleh memakai tanda kutip biasa di dalam teks.`;
 
 function cleanSlug(raw: string): string {
   const s = raw
@@ -90,11 +94,17 @@ export async function draftPost(keyword: string, modelId: ModelId = DEFAULT_MODE
   if (answer.truncated) throw new Error("Model berhenti di tengah artikel (terlalu panjang). Coba lagi.");
 
   let draft: Draft;
-  try {
-    draft = parseJsonAnswer<Draft>(answer.text);
-  } catch {
-    const t = answer.text;
-    throw new Error(`Model tidak mengembalikan JSON valid (${answer.provider}; ${t.length} karakter; awal: ${JSON.stringify(t.slice(0, 80))}; akhir: ${JSON.stringify(t.slice(-80))}).`);
+  const sections = parseSections(answer.text, ["TITLE", "SLUG", "META", "EXCERPT", "TAG", "BODY"]);
+  if (sections) {
+    draft = { title: sections.TITLE, slug: sections.SLUG, metaDescription: sections.META, excerpt: sections.EXCERPT, tag: sections.TAG, bodyHtml: sections.BODY };
+  } else {
+    // An older-style JSON answer (or a model that ignored the format) is still accepted.
+    try {
+      draft = parseJsonAnswer<Draft>(answer.text);
+    } catch {
+      const t = answer.text;
+      throw new Error(`Model tidak mengembalikan format yang benar (${answer.provider}; ${t.length} karakter; awal: ${JSON.stringify(t.slice(0, 80))}; akhir: ${JSON.stringify(t.slice(-80))}).`);
+    }
   }
 
   for (const key of ["title", "slug", "metaDescription", "excerpt", "bodyHtml", "tag"] as const) {

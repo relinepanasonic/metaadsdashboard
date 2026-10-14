@@ -124,3 +124,28 @@ function escapeControlCharsInStrings(json: string): string {
   }
   return out;
 }
+
+// A long article does not survive being wrapped in JSON: one plain quote character inside the text breaks it.
+// So drafts are asked for as labelled sections instead:  ===TITLE=== (text) ===BODY=== (text) ...
+export function parseSections(text: string, names: string[]): Record<string, string> | null {
+  const out: Record<string, string> = {};
+  const marker = /^===([A-Z_]+)===[ \t]*$/gm;
+  const hits: { name: string; start: number; end: number }[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = marker.exec(text))) hits.push({ name: m[1], start: m.index, end: m.index + m[0].length });
+  for (let i = 0; i < hits.length; i++) {
+    const to = i + 1 < hits.length ? hits[i + 1].start : text.length;
+    out[hits[i].name] = text.slice(hits[i].end, to).trim();
+  }
+  return names.every((n) => out[n]) ? out : null;
+}
+
+// A short post: the model should answer with the bare text, but it may still wrap it in a fence, quotes, or JSON.
+export function cleanPostText(answer: string): string {
+  let t = answer.trim().replace(/^```(?:\w+)?\s*/, "").replace(/\s*```$/, "").trim();
+  const wrapped = t.match(/^\{\s*"text"\s*:\s*"([\s\S]*)"\s*\}$/);
+  if (wrapped) t = wrapped[1].replace(/\\n/g, String.fromCharCode(10)).replace(/\\"/g, '"');
+  const quote = /["\u201c\u201d]/;
+  if (t.length > 1 && quote.test(t[0]) && quote.test(t[t.length - 1]) && !quote.test(t.slice(1, -1))) t = t.slice(1, -1);
+  return t.trim();
+}
