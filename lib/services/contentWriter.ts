@@ -83,14 +83,18 @@ export async function draftPost(keyword: string, modelId: ModelId = DEFAULT_MODE
     user: `Tulis satu artikel blog yang menargetkan kata kunci: "${keyword}".${serpContext}`,
     maxTokens: 16000,
     claudeModel: model.id,
-    adaptiveThinking: model.adaptiveThinking,
+    // An unattended run skips the thinking phase: thinking shares the token budget, and a long article plus thinking
+    // can run out mid-JSON (that is what made the first autopilot run fail).
+    adaptiveThinking: opts.autopilot ? false : model.adaptiveThinking,
   });
+  if (answer.truncated) throw new Error("Model berhenti di tengah artikel (terlalu panjang). Coba lagi.");
 
   let draft: Draft;
   try {
     draft = parseJsonAnswer<Draft>(answer.text);
   } catch {
-    throw new Error("Model tidak mengembalikan JSON valid.");
+    const t = answer.text;
+    throw new Error(`Model tidak mengembalikan JSON valid (${answer.provider}; ${t.length} karakter; awal: ${JSON.stringify(t.slice(0, 80))}; akhir: ${JSON.stringify(t.slice(-80))}).`);
   }
 
   for (const key of ["title", "slug", "metaDescription", "excerpt", "bodyHtml", "tag"] as const) {
