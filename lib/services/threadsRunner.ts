@@ -3,6 +3,7 @@
 // Make module at all. Claiming a destination first makes a double run harmless.
 
 import { db } from "@/lib/supabase/db";
+import { dueTargets } from "./dueQueue";
 import type { MediaItem } from "./scheduler";
 import { decryptToken, encryptToken, publishThread, refreshToken, threadsConfigured } from "./threads";
 
@@ -13,22 +14,9 @@ export async function publishDueThreads(): Promise<{ published: number; failed: 
   if (!db || !threadsConfigured()) return out;
   const now = new Date();
 
-  const { data: posts } = await db
-    .from("scheduled_posts")
-    .select("id,client_id,caption,content_type,media,topic")
-    .eq("status", "scheduled")
-    .lte("scheduled_at", now.toISOString())
-    .limit(50);
-  if (!posts?.length) return out;
+  const { targets, posts } = await dueTargets({ platform: "threads", postColumns: "id,client_id,caption,content_type,media,topic,scheduled_at", now });
 
-  const { data: targets } = await db
-    .from("scheduled_post_targets")
-    .select("id,post_id,handle,external_id,attempts")
-    .in("post_id", posts.map((p) => p.id))
-    .eq("platform", "threads")
-    .eq("status", "pending");
-
-  for (const t of targets ?? []) {
+  for (const t of targets) {
     const { data: won } = await db
       .from("scheduled_post_targets")
       .update({ status: "claimed", claimed_at: now.toISOString(), attempts: t.attempts + 1 })
@@ -37,7 +25,7 @@ export async function publishDueThreads(): Promise<{ published: number; failed: 
       .select("id");
     if (!won?.length) continue;
 
-    const post = posts.find((p) => p.id === t.post_id)!;
+    const post = posts.get(t.post_id)!;
     try {
       const { data: profile } = await db
         .from("publish_profiles")

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse, after } from "next/server";
 import { publishDueThreads } from "@/lib/services/threadsRunner";
 import { publishDueFacebook } from "@/lib/services/facebookRunner";
+import { dueTargets } from "@/lib/services/dueQueue";
 import { db } from "@/lib/supabase/db";
 import { schedulerAuthorized, schedulerConfigured } from "@/lib/services/schedulerAuth";
 import { accountBlock, titleFromCaption, youtubeDescription, type MediaItem, type Platform } from "@/lib/services/scheduler";
@@ -65,28 +66,18 @@ async function handle(req: NextRequest) {
   // Make's check-in doubles as the clock for Threads: anything due is published after this reply goes out.
   after(() => Promise.all([publishDueThreads().catch(() => null), publishDueFacebook().catch(() => null)]));
 
-  const { data: posts, error } = await db
-    .from("scheduled_posts")
-    .select("id,caption,content_type,media,scheduled_at,clients(name)")
-    .eq("status", "scheduled")
-    .lte("scheduled_at", now.toISOString())
-    .order("scheduled_at", { ascending: true })
-    .limit(50);
-  if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
-  if (!posts || posts.length === 0) return NextResponse.json({ ok: true, count: 0, jobs: [] });
-
   // Threads and Facebook are published by this app itself (not Make), so they never go out as jobs.
-  const { data: targets, error: tErr } = await db
-    .from("scheduled_post_targets")
-    .select("id,post_id,platform,handle,external_id,attempts")
-    .in("post_id", posts.map((p) => p.id))
-    .eq("status", "pending")
-    .not("platform", "in", "(threads,facebook)");
-  if (tErr) return NextResponse.json({ ok: false, error: tErr.message }, { status: 500 });
+  let due;
+  try {
+    due = await dueTargets({ excludePlatforms: ["threads", "facebook"], postColumns: "id,caption,content_type,media,scheduled_at,clients(name)", now });
+  } catch (e) {
+    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : String(e) }, { status: 500 });
+  }
+  const { targets, posts: byPost } = due;
+  if (targets.length === 0) return NextResponse.json({ ok: true, count: 0, jobs: [] });
 
-  const byPost = new Map(posts.map((p) => [p.id, p]));
   // A YouTube channel with no route in Make would be claimed and never answered: fail it now with the reason.
-  const unrouted = (targets ?? []).filter((t) => accountBlock(t.platform as Platform, t.handle));
+  const unrouted = targets.filter((t) => accountBlock(t.platform as Platform, t.handle));
   if (unrouted.length > 0) {
     await db
       .from("scheduled_post_targets")
@@ -94,10 +85,7 @@ async function handle(req: NextRequest) {
       .in("id", unrouted.map((t) => t.id))
       .eq("status", "pending");
   }
-  const ordered = (targets ?? [])
-    .filter((t) => byPost.has(t.post_id) && !accountBlock(t.platform as Platform, t.handle))
-    .sort((a, b) => Date.parse(byPost.get(a.post_id)!.scheduled_at) - Date.parse(byPost.get(b.post_id)!.scheduled_at))
-    .slice(0, limit);
+  const ordered = targets.filter((t) => !accountBlock(t.platform as Platform, t.handle)).slice(0, limit);
 
   const pageIds = ordered.some((t) => t.platform === "instagram") ? await instagramPageIds() : new Map<string, string>();
   const jobs = [];

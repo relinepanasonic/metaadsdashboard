@@ -171,6 +171,8 @@ export async function publishThread(userId: string, token: string, post: Threads
     await waitReady(creationId, token, "the carousel", 30);
   } else if (post.contentType === "text") {
     creationId = await create(userId, token, { media_type: "TEXT", ...extra });
+    // Even a text post needs a moment before it can be published; publishing too early gives "media cannot be found".
+    await waitReady(creationId, token, "the post", 30).catch(() => undefined);
   } else {
     const m = post.media[0];
     if (!m) throw new Error("This post has no photo or video.");
@@ -178,11 +180,21 @@ export async function publishThread(userId: string, token: string, post: Threads
     await waitReady(creationId, token, m.name ?? m.kind, m.kind === "video" ? 90 : 30);
   }
 
-  const published = await call<{ id: string }>(`${API}/${userId}/threads_publish`, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ creation_id: creationId, access_token: token }),
-  });
+  // "The media with id … cannot be found" (code 24) means Threads has not finished creating it yet: wait and try again.
+  let published: { id: string } | undefined;
+  for (let attempt = 1; !published; attempt++) {
+    try {
+      published = await call<{ id: string }>(`${API}/${userId}/threads_publish`, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ creation_id: creationId, access_token: token }),
+      });
+    } catch (e) {
+      const notReady = e instanceof Error && /cannot be found|code 24/i.test(e.message);
+      if (!notReady || attempt >= 5) throw e;
+      await sleep(4000);
+    }
+  }
   const info = await call<{ permalink?: string }>(`${API}/${published.id}?${new URLSearchParams({ fields: "permalink", access_token: token })}`).catch(() => ({ permalink: undefined }));
   return { id: published.id, permalink: info.permalink ?? null };
 }
