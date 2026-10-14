@@ -23,7 +23,10 @@ export default function CampaignsTable({ mode = "admin" }: CampaignsTableProps) 
   // The client is the sidebar workspace. Campaigns not yet assigned to any client are hidden unless asked for.
   const ws = useWorkspace();
   const client = isClientMode || !ws.workspace ? ALL : ws.workspace.name;
+  // Prof Toko Online is our own company, so its workspace also shows campaigns not assigned to anyone.
+  const isOwnCompany = (ws.workspace?.name ?? "").trim().toLowerCase() === "prof toko online";
   const [includeUnassigned, setIncludeUnassigned] = useState(false);
+  useEffect(() => setIncludeUnassigned(isOwnCompany), [isOwnCompany, ws.workspaceId]);
   const [search, setSearch] = useState("");
   const [rows, setRows] = useState<CampaignTableRow[]>([]);
   const [roster, setRoster] = useState<string[]>([]);
@@ -211,7 +214,7 @@ export default function CampaignsTable({ mode = "admin" }: CampaignsTableProps) 
                 className={`rounded-lg px-3 py-2 text-xs font-semibold ${includeUnassigned ? "bg-amber-500/20 text-amber-200" : "bg-white/[0.05] text-slate-400 hover:text-slate-200"}`}
                 title="Campaigns not assigned to any client yet. Show them here so you can assign them."
               >
-                {includeUnassigned ? "Hiding nothing" : "Show"} {unassignedCount} unassigned
+                {includeUnassigned ? `Showing ${unassignedCount} unassigned · hide` : `Show ${unassignedCount} unassigned`}
               </button>
             )}
           </>
