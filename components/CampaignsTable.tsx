@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Search, RefreshCw, Building2, Wallet2, UserRound, Loader2 } from "lucide-react";
+import { Search, RefreshCw, Building2, Wallet2, Loader2 } from "lucide-react";
 import type { MetaAccount, CampaignTableRow } from "@/lib/services/types";
 import { formatIDR, formatNumber } from "@/lib/format";
 import CustomSelect from "./CustomSelect";
+import { useWorkspace } from "./WorkspaceProvider";
 import DateRangePicker, { type DateRangeValue } from "./DateRangePicker";
 
 const ALL = "__all__";
@@ -19,7 +20,10 @@ export default function CampaignsTable({ mode = "admin" }: CampaignsTableProps) 
   const [accounts, setAccounts] = useState<MetaAccount[]>([]);
   const [account, setAccount] = useState<string>("");
   const [business, setBusiness] = useState<string>(ALL);
-  const [client, setClient] = useState<string>(ALL);
+  // The client is the sidebar workspace. Campaigns not yet assigned to any client are hidden unless asked for.
+  const ws = useWorkspace();
+  const client = isClientMode || !ws.workspace ? ALL : ws.workspace.name;
+  const [includeUnassigned, setIncludeUnassigned] = useState(false);
   const [search, setSearch] = useState("");
   const [rows, setRows] = useState<CampaignTableRow[]>([]);
   const [roster, setRoster] = useState<string[]>([]);
@@ -152,19 +156,16 @@ export default function CampaignsTable({ mode = "admin" }: CampaignsTableProps) 
       .finally(() => setLoading(false));
   }, [account, isClientMode, visibleAccountIds, dateQuery]);
 
-  const clients = useMemo(() => {
-    const set = new Set(rows.map((r) => r.client));
-    return Array.from(set).sort();
-  }, [rows]);
+  const unassignedCount = useMemo(() => rows.filter((r) => r.client === "Unassigned").length, [rows]);
 
   const filtered = useMemo(() => {
     return rows.filter((r) => {
-      if (client !== ALL && r.client !== client) return false;
+      if (client !== ALL && r.client !== client && !(includeUnassigned && r.client === "Unassigned")) return false;
       if (search && !r.name.toLowerCase().includes(search.toLowerCase()) && !r.client.toLowerCase().includes(search.toLowerCase()))
         return false;
       return true;
     });
-  }, [rows, client, search]);
+  }, [rows, client, includeUnassigned, search]);
 
   const showAccountCol = !isClientMode; // always: it is the Meta ad account the campaign really lives in
   const colSpan = showAccountCol ? 10 : 9;
@@ -203,15 +204,16 @@ export default function CampaignsTable({ mode = "admin" }: CampaignsTableProps) 
                 ]}
               />
             </div>
-            <div className="flex items-center gap-1.5">
-              <UserRound size={14} className="text-slate-500 shrink-0" />
-              <CustomSelect
-                className="min-w-[150px]"
-                value={client}
-                onChange={setClient}
-                options={[{ value: ALL, label: "All Clients" }, ...clients.map((c) => ({ value: c, label: c }))]}
-              />
-            </div>
+            {client !== ALL && unassignedCount > 0 && (
+              <button
+                type="button"
+                onClick={() => setIncludeUnassigned((v) => !v)}
+                className={`rounded-lg px-3 py-2 text-xs font-semibold ${includeUnassigned ? "bg-amber-500/20 text-amber-200" : "bg-white/[0.05] text-slate-400 hover:text-slate-200"}`}
+                title="Campaigns not assigned to any client yet. Show them here so you can assign them."
+              >
+                {includeUnassigned ? "Hiding nothing" : "Show"} {unassignedCount} unassigned
+              </button>
+            )}
           </>
         )}
         <DateRangePicker value={dateRange} onChange={setDateRange} />

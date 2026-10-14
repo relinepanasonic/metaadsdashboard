@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Users, TrendingUp, Eye, UserCheck, MousePointerClick, RefreshCw, Loader2, AlertTriangle, ExternalLink, Filter, Camera, ThumbsUp, History, Play, ImageOff } from "lucide-react";
 import { ResponsiveContainer, ComposedChart, Area, LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from "recharts";
 import CustomSelect from "@/components/CustomSelect";
+import { useWorkspace } from "@/components/WorkspaceProvider";
 import KpiCard from "@/components/KpiCard";
 import PostInsightsModal, { type InsightPost } from "@/components/social/PostInsightsModal";
 import { judgeReel, type Grade, type PostMetrics, type Verdict } from "@/lib/social/reelBadges";
@@ -144,9 +145,12 @@ export default function SocialDashboard({ canManage = true }: { canManage?: bool
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [status, setStatus] = useState<Status | null>(null);
   const [loading, setLoading] = useState(true);
-  const [clientFilter, setClientFilter] = useState("all");
+  // The client is the sidebar workspace.
+  const ws = useWorkspace();
+  const clientFilter = ws.isClient || !ws.workspaceId ? "all" : ws.workspaceId;
   const [platformFilter, setPlatformFilter] = useState("all");
   const [accountFilter, setAccountFilter] = useState("all");
+  useEffect(() => setAccountFilter("all"), [ws.workspaceId]); // an account picked for one client should not follow you to another
   const [range, setRange] = useState("30");
   const [audience, setAudience] = useState<"followers" | "engaged">("followers");
   const autoSyncedRef = useRef(false);
@@ -216,12 +220,6 @@ export default function SocialDashboard({ canManage = true }: { canManage?: bool
     });
     load();
   }
-
-  const clientOptions = useMemo(() => {
-    const seen = new Map<string, string>();
-    for (const a of accounts) seen.set(a.clientId, a.clientName);
-    return [...seen.entries()].map(([value, label]) => ({ value, label }));
-  }, [accounts]);
 
   // Account list narrows with the client and platform picked above it.
   const accountOptions = useMemo(
@@ -406,20 +404,9 @@ export default function SocialDashboard({ canManage = true }: { canManage?: bool
         </div>
       )}
 
-      {/* Filters: Client | Platform | Account | Duration */}
+      {/* Filters: Platform | Account | Duration (the client is the sidebar workspace) */}
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <Filter size={14} className="shrink-0 text-slate-500" />
-        {canManage && (
-        <CustomSelect
-          className="min-w-[160px]"
-          value={clientFilter}
-          onChange={(v) => {
-            setClientFilter(v);
-            setAccountFilter("all");
-          }}
-          options={[{ value: "all", label: "All clients", accent: true }, ...clientOptions]}
-        />
-        )}
         <CustomSelect
           className="min-w-[140px]"
           value={platformFilter}

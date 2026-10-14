@@ -12,7 +12,7 @@ import {
   Layers,
   Building2,
   Wallet2,
-  UserRound,
+
 } from "lucide-react";
 import type { UnifiedDashboardData, MetaAccount } from "@/lib/services/types";
 import { formatIDR, formatNumber, formatPct } from "@/lib/format";
@@ -23,6 +23,7 @@ import SourcesDonut from "./SourcesDonut";
 import TopCampaignsBar from "./TopCampaignsBar";
 import ApiStatusFlow from "./ApiStatusFlow";
 import CustomSelect from "./CustomSelect";
+import { useWorkspace } from "./WorkspaceProvider";
 import DateRangePicker, { type DateRangeValue } from "./DateRangePicker";
 
 const ALL = "__all__";
@@ -35,11 +36,12 @@ export default function DashboardClient() {
 
   // Filters
   const [accounts, setAccounts] = useState<MetaAccount[]>([]);
-  const [clients, setClients] = useState<string[]>([]);
   const [platform, setPlatform] = useState<"both" | "meta" | "google">("both");
   const [business, setBusiness] = useState<string>(ALL);
   const [account, setAccount] = useState<string>(ALL_ACCOUNTS);
-  const [client, setClient] = useState<string>(ALL);
+  // The client is the sidebar workspace (a Client login is already limited to its own data by the API).
+  const ws = useWorkspace();
+  const client = ws.isClient || !ws.workspace ? ALL : ws.workspace.name;
   const [dateRange, setDateRange] = useState<DateRangeValue>({ preset: "last_30d" });
 
   // Load filter option sources once.
@@ -47,10 +49,6 @@ export default function DashboardClient() {
     fetch("/api/meta/accounts", { cache: "no-store" })
       .then((r) => r.json())
       .then((j) => j.ok && setAccounts(j.accounts as MetaAccount[]))
-      .catch(() => {});
-    fetch("/api/clients", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((j) => j.ok && setClients((j.clients as { name: string }[]).map((c) => c.name)))
       .catch(() => {});
   }, []);
 
@@ -91,9 +89,16 @@ export default function DashboardClient() {
   }
 
   useEffect(() => {
+    if (ws.loading) return; // wait for the workspace so the first load is already the right client
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [platform, account, client, dateRange]);
+  }, [platform, account, client, dateRange, ws.loading]);
+
+  // An ad account picked for one client should not follow you into another.
+  useEffect(() => {
+    setAccount(ALL_ACCOUNTS);
+    setBusiness(ALL);
+  }, [ws.workspaceId]);
 
   return (
     <div className="relative z-10 mx-auto max-w-[1400px] px-4 py-6 sm:px-6 lg:px-8">
@@ -151,15 +156,6 @@ export default function DashboardClient() {
               { value: ALL_ACCOUNTS, label: "All Ad Accounts", accent: true },
               ...visibleAccounts.map((a) => ({ value: a.id, label: a.name })),
             ]}
-          />
-        </div>
-        <div className="flex items-center gap-1.5">
-          <UserRound size={14} className="text-slate-500 shrink-0" />
-          <CustomSelect
-            className="min-w-[150px]"
-            value={client}
-            onChange={setClient}
-            options={[{ value: ALL, label: "All Clients" }, ...clients.map((c) => ({ value: c, label: c }))]}
           />
         </div>
         <DateRangePicker value={dateRange} onChange={setDateRange} />

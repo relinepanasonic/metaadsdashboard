@@ -8,6 +8,8 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 export interface Workspace {
   id: string;
   name: string;
+  metaAdAccountId: string | null;
+  googleAdsAccountId: string | null;
 }
 
 interface WorkspaceCtx {
@@ -46,7 +48,12 @@ export default function WorkspaceProvider({ children }: { children: ReactNode })
         }
         const res = await fetch("/api/clients", { cache: "no-store" }).then((r) => r.json());
         if (!alive || !res.ok) return;
-        const list: Workspace[] = (res.clients as { id: string; name: string }[]).map((c) => ({ id: c.id, name: c.name }));
+        const list: Workspace[] = (res.clients as { id: string; name: string; meta_ad_account_id?: string | null; google_ads_account_id?: string | null }[]).map((c) => ({
+          id: c.id,
+          name: c.name,
+          metaAdAccountId: c.meta_ad_account_id ?? null,
+          googleAdsAccountId: c.google_ads_account_id ?? null,
+        }));
         setWorkspaces(list);
         let remembered: string | null = null;
         try {

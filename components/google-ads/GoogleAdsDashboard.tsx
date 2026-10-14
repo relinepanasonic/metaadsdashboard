@@ -20,7 +20,9 @@ import {
 } from "lucide-react";
 import KpiCard from "@/components/KpiCard";
 import Panel from "@/components/Panel";
+import Link from "next/link";
 import CustomSelect from "@/components/CustomSelect";
+import { useWorkspace } from "@/components/WorkspaceProvider";
 import DateRangePicker, { type DateRangeValue } from "@/components/DateRangePicker";
 import GoogleAdsSetup from "./GoogleAdsSetup";
 import { formatNumber } from "@/lib/format";
@@ -60,7 +62,11 @@ const inputCls =
 export default function GoogleAdsDashboard({ isClient, canConnect }: { isClient: boolean; canConnect: boolean }) {
   const [tab, setTab] = useState<TabId>("overview");
   const [range, setRange] = useState<DateRangeValue>({ preset: "last_30d" });
-  const [customerId, setCustomerId] = useState("");
+  // The client is the sidebar workspace: staff see that client's linked Google Ads account (a Client login is pinned by the API).
+  const ws = useWorkspace();
+  const wsId = (ws.workspace?.googleAdsAccountId ?? "").replace(/D/g, "");
+  const noAccountForWorkspace = !isClient && !ws.loading && Boolean(ws.workspace) && !wsId;
+  const customerId = isClient ? "" : wsId;
   const [stats, setStats] = useState<GoogleStats | null>(null);
   const [reason, setReason] = useState<string>("");
   const [loading, setLoading] = useState(true);
@@ -77,6 +83,13 @@ export default function GoogleAdsDashboard({ isClient, canConnect }: { isClient:
   }, [isClient]);
 
   const loadStats = useCallback(async () => {
+    if (!isClient && ws.loading) return; // wait for the workspace
+    if (noAccountForWorkspace) {
+      setStats(null);
+      setReason("no-account");
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError("");
     try {
@@ -90,13 +103,12 @@ export default function GoogleAdsDashboard({ isClient, canConnect }: { isClient:
       if (!j.ok) throw new Error(j.error || "Failed to load");
       setStats(j.stats);
       setReason(j.reason ?? "");
-      if (j.stats && !customerId) setCustomerId(j.stats.account.customerId);
     } catch (e) {
       setError((e as Error).message);
     } finally {
       setLoading(false);
     }
-  }, [customerId, range]);
+  }, [customerId, range, isClient, ws.loading, noAccountForWorkspace]);
 
   useEffect(() => { loadAccounts(); }, [loadAccounts]);
   useEffect(() => { loadStats(); }, [loadStats]);
@@ -137,6 +149,11 @@ export default function GoogleAdsDashboard({ isClient, canConnect }: { isClient:
     }
     return (
       <div className="flex flex-col gap-4">
+        {noAccountForWorkspace && (
+          <div className="glass-panel p-4 text-xs text-amber-300">
+            No Google Ads account is linked to <b>{ws.workspace?.name}</b>. Link one on the <Link href="/clients" className="underline">Clients</Link> page (Google Ads account ID), then it shows here.
+          </div>
+        )}
         {error && <div className="glass-panel p-3 text-xs text-rose-300">{error}</div>}
         <GoogleAdsSetup canConnect={canConnect} accounts={accounts} reload={loadAccounts} onSynced={loadStats} />
       </div>
@@ -163,20 +180,10 @@ export default function GoogleAdsDashboard({ isClient, canConnect }: { isClient:
     <div className="flex flex-col gap-4">
       {/* Filter bar */}
       <div className="glass-panel flex flex-wrap items-center gap-3 p-3">
-        {!isClient && accounts && accounts.accounts.length > 1 && (
-          <CustomSelect
-            className="min-w-[200px]"
-            value={customerId}
-            onChange={(v) => setCustomerId(v)}
-            options={accounts.accounts.map((a) => ({ value: a.customer_id, label: `${a.brand ? a.brand + " · " : ""}${a.name ?? a.customer_id}` }))}
-          />
-        )}
-        {(isClient || (accounts?.accounts.length ?? 0) <= 1) && (
-          <div className="text-xs">
-            <span className="font-semibold text-slate-100">{stats.account.name}</span>
-            <span className="ml-2 text-slate-500">{stats.account.customerId.replace(/(\d{3})(\d{3})(\d{4})/, "$1-$2-$3")} · {stats.account.currency}</span>
-          </div>
-        )}
+        <div className="text-xs">
+          <span className="font-semibold text-slate-100">{stats.account.name}</span>
+          <span className="ml-2 text-slate-500">{stats.account.customerId.replace(/(d{3})(d{3})(d{4})/, "$1-$2-$3")} · {stats.account.currency}</span>
+        </div>
         <DateRangePicker value={range} onChange={setRange} />
         <div className="ml-auto flex flex-wrap items-center gap-3 text-[11px] text-slate-500">
           {syncMsg && <span className="text-slate-400">{syncMsg}</span>}
