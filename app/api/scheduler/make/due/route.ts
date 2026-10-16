@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse, after } from "next/server";
 import { publishDueThreads } from "@/lib/services/threadsRunner";
 import { publishDueFacebook } from "@/lib/services/facebookRunner";
+import { verifyTiktokPosts } from "@/lib/services/zernioCheck";
 import { dueTargets } from "@/lib/services/dueQueue";
 import { db } from "@/lib/supabase/db";
 import { schedulerAuthorized, schedulerConfigured } from "@/lib/services/schedulerAuth";
@@ -64,7 +65,7 @@ async function handle(req: NextRequest) {
     .lt("claimed_at", staleBefore);
 
   // Make's check-in doubles as the clock for Threads: anything due is published after this reply goes out.
-  after(() => Promise.all([publishDueThreads().catch(() => null), publishDueFacebook().catch(() => null)]));
+  after(() => Promise.all([publishDueThreads().catch(() => null), publishDueFacebook().catch(() => null), verifyTiktokPosts().catch(() => null)]));
 
   // Threads and Facebook are published by this app itself (not Make), so they never go out as jobs.
   let due;

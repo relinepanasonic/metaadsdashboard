@@ -286,6 +286,7 @@ export default function Scheduler() {
                             <span className={`h-1.5 w-1.5 rounded-full ${TARGET_DOT[t.status]}`} />
                             {PLATFORM_LABEL[t.platform]}{t.handle ? ` ${t.handle}` : ""}
                             {t.status === "published" && t.published_url && <a href={t.published_url} target="_blank" rel="noopener noreferrer" className="text-cyan-300 hover:underline">view</a>}
+                            {t.status === "published" && t.platform === "tiktok" && !t.published_url && <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-amber-300" title="Sent to Zernio. Zernio can still keep a post as a draft, so confirm it appears on TikTok. It is confirmed automatically when ZERNIO_API_KEY is set.">sent to Zernio — not confirmed</span>}
                           </span>
                         ))}
                       </div>
