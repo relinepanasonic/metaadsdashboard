@@ -75,7 +75,17 @@ export default function GoogleAdsSetup({
       </div>
 
       <div className="flex flex-col gap-5">
-        <Step n={1} done={oauthOk} title="Create the Google sign-in keys">
+        <Step n={0} done={accounts ? !accounts.needsMigration : false} title="Create the database tables">
+          {accounts?.needsMigration ? (
+            <p>
+              Not done yet. In the Supabase SQL Editor, run the file <span className={code}>supabase/migrations/0021_google_ads.sql</span> from the project folder (open it, copy everything, paste, Run). Then reload this page.
+            </p>
+          ) : (
+            <p>Done — the Google Ads tables exist.</p>
+          )}
+        </Step>
+
+        <Step n={1} done={oauthOk && Boolean(accounts?.developerToken)} title="Create the Google sign-in keys and the developer token">
           <ol className="list-decimal space-y-1 pl-4">
             <li>Open <a className="text-cyan-300 underline" href="https://console.cloud.google.com/projectcreate" target="_blank" rel="noreferrer">Google Cloud Console <ExternalLink size={10} className="inline" /></a> and create a project (or pick an existing one).</li>
             <li>In <b>APIs &amp; Services → Library</b>, enable <b>Google Ads API</b>.</li>
@@ -89,7 +99,10 @@ export default function GoogleAdsSetup({
                 {copied && <span className="text-[10px] text-emerald-300">Copied</span>}
               </div>
             </li>
-            <li>In <b>Vercel → Settings → Environment Variables</b> add <span className={code}>GOOGLE_ADS_CLIENT_ID</span> and <span className={code}>GOOGLE_ADS_CLIENT_SECRET</span> from that client, then redeploy. <i>Enter them in Vercel yourself — never paste secrets in chat.</i></li>
+            <li>
+              <b>Developer token</b> ({accounts?.developerToken ? <span className="text-emerald-300">found</span> : <span className="text-amber-300">missing</span>}): sign in to <a className="text-cyan-300 underline" href="https://ads.google.com/aw/apicenter" target="_blank" rel="noreferrer">Google Ads → Tools → API Center <ExternalLink size={10} className="inline" /></a> with a <b>manager (MCC)</b> account and copy the developer token. If you have no manager account, create a free one at ads.google.com/home/tools/manager-accounts and link your ad account to it.
+            </li>
+            <li>In <b>Vercel → Settings → Environment Variables</b> add <span className={code}>GOOGLE_ADS_CLIENT_ID</span>, <span className={code}>GOOGLE_ADS_CLIENT_SECRET</span> and <span className={code}>GOOGLE_ADS_DEVELOPER_TOKEN</span>, then redeploy. <i>Enter them in Vercel yourself — never paste secrets in chat.</i></li>
           </ol>
         </Step>
 

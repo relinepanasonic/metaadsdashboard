@@ -37,6 +37,8 @@ type TabId = "overview" | "campaigns" | "adgroups" | "keywords" | "terms" | "aud
 export interface AccountsResponse {
   configured: boolean;
   oauthConfigured: boolean;
+  developerToken?: boolean;
+  needsMigration?: boolean;
   accounts: { customer_id: string; name: string | null; currency: string | null; last_synced_at: string | null; last_error: string | null; brand: string | null }[];
   unsyncedBrands: { brand: string; customerId: string }[];
   live?: { customerId: string; name: string; currency: string; isManager: boolean; brand: string | null }[];

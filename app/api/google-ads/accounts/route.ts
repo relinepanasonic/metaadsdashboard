@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
   if (me.role === "client") return NextResponse.json({ ok: false, error: "Not allowed" }, { status: 403 });
   if (!db) return NextResponse.json({ ok: false, error: "Database not configured" }, { status: 500 });
 
-  const [{ data: accounts }, { data: clients }] = await Promise.all([
+  const [{ data: accounts, error: tableErr }, { data: clients }] = await Promise.all([
     db.from("google_ads_accounts").select("customer_id,name,currency,is_manager,last_synced_at,last_error,first_data_date").order("name"),
     db.from("clients").select("name,google_ads_account_id").not("google_ads_account_id", "is", null),
   ]);
@@ -30,6 +30,8 @@ export async function GET(req: NextRequest) {
     ok: true;
     configured: boolean;
     oauthConfigured: boolean;
+    developerToken: boolean;
+    needsMigration: boolean;
     accounts: unknown[];
     unsyncedBrands: { brand: string; customerId: string }[];
     live?: (AccountInfo & { brand: string | null })[];
@@ -38,6 +40,9 @@ export async function GET(req: NextRequest) {
     ok: true,
     configured: googleConfigured(),
     oauthConfigured: googleOauthConfigured(),
+    developerToken: Boolean(process.env.GOOGLE_ADS_DEVELOPER_TOKEN),
+    // the tables come from migration 0021; until it is run the lookup above fails and reads as empty
+    needsMigration: Boolean(tableErr && /google_ads_accounts|schema cache|does not exist/i.test(tableErr.message)),
     accounts: (accounts ?? []).filter((a) => !a.is_manager).map((a) => ({ ...a, brand: brandOf.get(a.customer_id) ?? null })),
     unsyncedBrands: [...brandOf.entries()]
       .filter(([id]) => !(accounts ?? []).some((a) => a.customer_id === id))
