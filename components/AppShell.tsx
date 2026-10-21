@@ -4,7 +4,7 @@ import { usePathname } from "next/navigation";
 import Sidebar from "./Sidebar";
 import WorkspaceProvider from "./WorkspaceProvider";
 
-const NO_SIDEBAR_PREFIXES = ["/login", "/forgot-password", "/reset-password", "/setup", "/invite/"];
+const NO_SIDEBAR_PREFIXES = ["/login", "/forgot-password", "/reset-password", "/setup", "/invite/", "/privacy"];
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
