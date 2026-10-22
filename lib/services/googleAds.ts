@@ -399,7 +399,10 @@ export async function syncGoogleAccount(customerIdRaw: string, days = 30): Promi
     return { customerId, name: info.name, campaignDays: campaignDaily.length, segments: segRows.length, items: items.length, errors };
   } catch (e) {
     const message = (e as Error).message;
-    await db.from("google_ads_accounts").upsert({ customer_id: customerId, last_error: message.slice(0, 500) }, { onConflict: "customer_id" });
+    // Google refuses metrics for a manager (MCC) account. Remember that, so it is hidden from the list and the
+    // nightly job skips it instead of failing on it every night.
+    const isManager = /REQUESTED_METRICS_FOR_MANAGER/.test(message);
+    await db.from("google_ads_accounts").upsert({ customer_id: customerId, last_error: message.slice(0, 500), ...(isManager ? { is_manager: true } : {}) }, { onConflict: "customer_id" });
     throw e;
   }
 }
