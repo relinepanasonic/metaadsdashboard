@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarClock, LayoutDashboard } from "lucide-react";
+import { CalendarClock, LayoutDashboard, Sparkles } from "lucide-react";
 
 const TABS = [
   { href: "/social-media", label: "Dashboard", icon: LayoutDashboard },
   { href: "/social-media/schedule", label: "Scheduler", icon: CalendarClock },
+  { href: "/social-media/reengine", label: "Re-Engine", icon: Sparkles },
 ];
 
 export default function SocialTabs() {
