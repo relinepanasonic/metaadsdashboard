@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Check, Clipboard, Download, Loader2, Sparkles, Star, Trash2 } from "lucide-react";
 import CustomSelect from "@/components/CustomSelect";
 import { useWorkspace } from "@/components/WorkspaceProvider";
@@ -123,7 +123,9 @@ export default function ReEngine() {
   const [model, setModel] = useState("");
 
   const [busy, setBusy] = useState(false);
+  const [busyRow, setBusyRow] = useState(""); // media id of the Reel being re-engineered from its own button
   const [error, setError] = useState("");
+  const resultRef = useRef<HTMLDivElement>(null);
   const [result, setResult] = useState<Result | null>(null);
   const [runs, setRuns] = useState<RunSummary[]>([]);
 
@@ -179,14 +181,15 @@ export default function ReEngine() {
   const visible = useMemo(() => (winnersOnly ? rows.filter((r) => r.v.winner) : rows), [rows, winnersOnly]);
   const selected = rows.find((r) => r.post.media_id === picked) ?? null;
 
-  function buildSource(): SourcePost | null {
-    if (mode === "paste") return pasted.trim() ? { caption: pasted.trim(), script: script.trim() || undefined } : null;
-    if (!selected) return null;
-    const p = selected.post;
+  function buildSource(row?: Row): SourcePost | null {
+    if (!row && mode === "paste") return pasted.trim() ? { caption: pasted.trim(), script: script.trim() || undefined } : null;
+    const chosen = row ?? selected;
+    if (!chosen) return null;
+    const p = chosen.post;
     return {
       mediaId: p.media_id,
       permalink: p.permalink,
-      account: selected.account,
+      account: chosen.account,
       postedAt: p.posted_at,
       caption: p.caption ?? "",
       script: script.trim() || undefined,
@@ -194,14 +197,16 @@ export default function ReEngine() {
         views: p.views ?? null, reach: p.reach ?? null, likes: p.like_count, comments: p.comments_count, saves: p.saved ?? null, shares: p.shares ?? null,
         avgWatchSec: p.avg_watch_time_ms != null ? p.avg_watch_time_ms / 1000 : null, skipRate: p.skip_rate ?? null,
       },
-      verdicts: { hook: selected.v.hook.label, value: selected.v.value.label, cta: selected.v.cta.label, hookWhy: selected.v.hook.why, valueWhy: selected.v.value.why, ctaWhy: selected.v.cta.why },
+      verdicts: { hook: chosen.v.hook.label, value: chosen.v.value.label, cta: chosen.v.cta.label, hookWhy: chosen.v.hook.why, valueWhy: chosen.v.value.why, ctaWhy: chosen.v.cta.why },
     };
   }
 
-  async function generate() {
-    const source = buildSource();
+  async function generate(row?: Row) {
+    const source = buildSource(row);
     if (!source) return setError(mode === "paste" ? "Paste the caption of a successful post first." : "Pick a successful post first.");
+    if (row) setPicked(row.post.media_id);
     setBusy(true);
+    setBusyRow(row?.post.media_id ?? "");
     setError("");
     setResult(null);
     const res = await fetch("/api/reengine/generate", {
@@ -210,9 +215,11 @@ export default function ReEngine() {
       body: JSON.stringify({ clientId, source, count: Number(count), direction, formatHint, productKeys, guestKeys, model: model || undefined }),
     }).then((r) => r.json()).catch(() => ({ ok: false, error: "Network error (the request may have timed out — try fewer contents)" }));
     setBusy(false);
+    setBusyRow("");
     if (!res.ok) return setError(res.error ?? "Could not generate.");
     setResult(res as Result);
     loadRuns();
+    setTimeout(() => resultRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 120);
   }
 
   async function openRun(id: string) {
@@ -289,7 +296,19 @@ export default function ReEngine() {
                     {visible.slice(0, 60).map((r) => {
                       const on = r.post.media_id === picked;
                       return (
-                        <button key={r.post.media_id} type="button" onClick={() => setPicked(r.post.media_id)} className={`flex w-full items-center gap-3 border-b border-white/[0.05] px-3 py-2.5 text-left last:border-0 ${on ? "bg-cyan-500/10" : "hover:bg-white/[0.04]"}`}>
+                        <div key={r.post.media_id} className={`flex w-full items-center gap-3 border-b border-white/[0.05] px-3 py-2.5 last:border-0 ${on ? "bg-cyan-500/10" : "hover:bg-white/[0.04]"}`}>
+                          <button
+                            type="button"
+                            onClick={() => generate(r)}
+                            disabled={busy || !bible}
+                            title={bible ? "Generate new contents from this Reel with the settings below" : "Load the Series Bible first"}
+                            className="flex w-[78px] shrink-0 flex-col items-center gap-1 rounded-lg bg-cyan-500/15 px-2 py-2 text-[10px] font-bold text-cyan-200 hover:bg-cyan-500/30 disabled:opacity-40"
+                            style={{ boxShadow: "inset 0 0 0 1px rgba(34,211,238,0.35)" }}
+                          >
+                            {busyRow === r.post.media_id ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />}
+                            {busyRow === r.post.media_id ? "Writing…" : "Re-engine"}
+                          </button>
+                          <button type="button" onClick={() => setPicked(r.post.media_id)} className="flex min-w-0 flex-1 items-center gap-3 text-left">
                           <Cover post={r.post} />
                           <div className="min-w-0 flex-1">
                             <div className="line-clamp-2 text-[12px] font-medium leading-snug text-slate-100">{r.post.caption?.trim() || "(no caption)"}</div>
@@ -298,7 +317,8 @@ export default function ReEngine() {
                           {r.v.winner && <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-bold text-amber-300"><Star size={10} /> Winner</span>}
                           <div className="hidden items-center gap-1.5 sm:flex"><VerdictChip v={r.v.hook} /><VerdictChip v={r.v.value} /><VerdictChip v={r.v.cta} /></div>
                           <div className="w-[56px] text-right text-[11px] tabular-nums text-slate-300">{r.views ? compactNumber(r.views) : "—"}<div className="text-[9px] text-slate-600">views</div></div>
-                        </button>
+                          </button>
+                        </div>
                       );
                     })}
                   </div>
@@ -364,8 +384,8 @@ export default function ReEngine() {
             </div>
 
             <div className="mt-5 flex flex-wrap items-center gap-3">
-              <button type="button" onClick={generate} disabled={busy || !bible} className="inline-flex items-center gap-2 rounded-lg bg-cyan-500/20 px-5 py-2.5 text-xs font-bold text-cyan-100 hover:bg-cyan-500/30 disabled:opacity-50" style={{ boxShadow: "inset 0 0 0 1px rgba(34,211,238,0.4)" }}>
-                {busy ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />} {busy ? "Analysing and writing…" : "Generate new contents"}
+              <button type="button" onClick={() => generate()} disabled={busy || !bible} className="inline-flex items-center gap-2 rounded-lg bg-cyan-500/20 px-5 py-2.5 text-xs font-bold text-cyan-100 hover:bg-cyan-500/30 disabled:opacity-50" style={{ boxShadow: "inset 0 0 0 1px rgba(34,211,238,0.4)" }}>
+                {busy ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />} {busy && !busyRow ? "Analysing and writing…" : "Generate from the selected / pasted content"}
               </button>
               {busy && <span className="text-[11px] text-slate-500">Takes 1 to 3 minutes. Please keep this page open.</span>}
               {error && <span className="text-[11px] text-rose-300">{error}</span>}
@@ -375,8 +395,13 @@ export default function ReEngine() {
       )}
 
       {/* results */}
+      {tab === "engine" && busy && busyRow && (
+        <div className="flex items-center gap-3 rounded-xl border border-cyan-500/25 bg-cyan-500/[0.06] px-4 py-3 text-xs text-cyan-100">
+          <Loader2 size={15} className="animate-spin" /> Analysing the Reel and writing {count} new content{count === "1" ? "" : "s"}. This takes 1 to 3 minutes; please keep this page open.
+        </div>
+      )}
       {tab === "engine" && result && (
-        <>
+        <div ref={resultRef} className="flex scroll-mt-4 flex-col gap-5">
           <section className="rounded-2xl border border-cyan-500/25 bg-cyan-500/[0.04] p-5">
             <div className="flex flex-wrap items-center gap-3">
               <h2 className="text-sm font-black text-white">What made it work</h2>
@@ -398,7 +423,7 @@ export default function ReEngine() {
           {result.items.map((it, i) => (
             <ItemCard key={i} n={i + 1} item={it} bible={bible ?? null} />
           ))}
-        </>
+        </div>
       )}
 
       {/* history */}
