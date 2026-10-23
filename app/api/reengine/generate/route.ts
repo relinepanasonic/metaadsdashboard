@@ -3,6 +3,7 @@ import { db } from "@/lib/supabase/db";
 import { getCurrentUser } from "@/lib/auth/currentUser";
 import { generateContent } from "@/lib/services/reengine";
 import { isValidModelId } from "@/lib/seo/constants";
+import { LITE_BIBLE } from "@/lib/reengine/liteBible";
 import type { SeriesBible, SourcePost } from "@/lib/reengine/types";
 
 export const maxDuration = 300;
@@ -27,13 +28,14 @@ export async function POST(req: NextRequest) {
   if (!b.source?.caption?.trim()) return NextResponse.json({ ok: false, error: "Pick a successful post or paste its caption first." }, { status: 400 });
   const count = Math.min(Math.max(Math.round(b.count ?? 3), 1), 5);
 
+  // A saved Series Bible is optional. Without one the run uses the built-in quick mode.
   const { data: row, error: bErr } = await db.from("reengine_bibles").select("data").eq("client_id", b.clientId).maybeSingle();
-  if (bErr) return NextResponse.json({ ok: false, error: /reengine_|schema cache|does not exist/i.test(bErr.message) ? "Run migration 0030 in Supabase first." : bErr.message }, { status: 500 });
-  if (!row) return NextResponse.json({ ok: false, error: "This workspace has no Series Bible yet. Open the Series Bible tab and load the template first." }, { status: 400 });
+  if (bErr && !/reengine_|schema cache|does not exist/i.test(bErr.message)) return NextResponse.json({ ok: false, error: bErr.message }, { status: 500 });
+  const bible = (row?.data as SeriesBible | undefined) ?? LITE_BIBLE;
 
   try {
     const result = await generateContent({
-      bible: row.data as SeriesBible,
+      bible,
       source: b.source,
       count,
       direction: b.direction,
@@ -47,7 +49,7 @@ export async function POST(req: NextRequest) {
       .insert({ client_id: b.clientId, source: b.source, analysis: result.analysis, items: result.items, provider: result.provider, created_by: me.username })
       .select("id")
       .single();
-    return NextResponse.json({ ok: true, runId: saved?.id ?? null, ...result });
+    return NextResponse.json({ ok: true, runId: saved?.id ?? null, quickMode: Boolean(bible.lite), ...result });
   } catch (e) {
     return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : String(e) }, { status: 500 });
   }

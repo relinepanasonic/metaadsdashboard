@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
   head.font = { bold: true, color: { argb: "FFFFFFFF" } };
   head.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1F2937" } };
   items.forEach((it, i) => {
-    const products = it.productKeys.map((k) => bible?.products.find((p) => p.key === k)?.name ?? k).join(" + ");
+    const products = it.productKeys.map((k) => bible?.products.find((p) => p.key === k)?.name ?? k).join(" + ") || it.spokenNames;
     ws.addRow([i + 1, it.format, it.title, it.hook, it.problem, it.solution, it.cta, products, it.imagePrompt, it.videoPrompt, it.caption]);
   });
   [5, 22, 26, 38, 34, 44, 28, 34, 90, 90, 50].forEach((w, i) => (ws.getColumn(i + 1).width = w));

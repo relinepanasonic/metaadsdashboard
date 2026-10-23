@@ -49,6 +49,8 @@ export interface BibleBlocks {
 export interface SeriesBible {
   seriesName: string;
   hostName: string;
+  requireBrand?: string; // if set, the dialogue must say this brand name (e.g. "Panasonic")
+  lite?: boolean; // the built-in quick mode: no fixed character, no product list
   host: string;
   location: string;
   hostVoice: string;

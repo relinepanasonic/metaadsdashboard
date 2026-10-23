@@ -36,24 +36,24 @@ export interface GenerateResult {
 function systemPrompt(b: SeriesBible): string {
   const usable = b.products.filter((p) => p.usable);
   const blocked = b.products.filter((p) => !p.usable);
-  return `Kamu penulis konten untuk seri "${b.seriesName}". Host: ${b.hostName}. Tagline: "${b.taglines.main}". Sign-off wajib di akhir setiap video: "${b.taglines.signoff}"
+  return `Kamu penulis konten untuk seri "${b.seriesName}". Host: ${b.hostName}. ${b.taglines.main ? `Tagline: "${b.taglines.main}". ` : ""}${b.taglines.signoff ? `Sign-off wajib di akhir setiap video: "${b.taglines.signoff}"` : ""}
 
 TUGAS: dari satu konten yang SUKSES, ambil rumus hook dan struktur-nya, lalu buat konten BARU dengan rumus yang sama tetapi situasi, produk, tokoh, dan ide yang berbeda. Jangan menyalin kalimat konten sumber.
 
 ATURAN SERI (wajib dipatuhi):
 ${b.rules.map((r, i) => `${i + 1}. ${r}`).join("\n")}
 
-PRODUK YANG BOLEH DIPAKAI. Hanya fakta pada "klaim" yang boleh diucapkan; selebihnya hanya fungsi umum tanpa angka atau janji:
-${usable.map((p) => `- ${p.key} | ${p.name} | klaim: ${p.claims || "(belum ada data terverifikasi, hindari kecuali diminta)"}${p.note ? ` | catatan: ${p.note}` : ""}`).join("\n")}
+${usable.length ? `PRODUK YANG BOLEH DIPAKAI. Hanya fakta pada "klaim" yang boleh diucapkan; selebihnya hanya fungsi umum tanpa angka atau janji:
+${usable.map((p) => `- ${p.key} | ${p.name} | klaim: ${p.claims || "(belum ada data terverifikasi, hindari kecuali diminta)"}${p.note ? ` | catatan: ${p.note}` : ""}`).join("\n")}` : "PRODUK / TOPIK: tidak ada daftar produk. Ambil topik dan produk dari konten sumber dan arahan pengguna. JANGAN mengarang spesifikasi, angka, harga, atau janji hasil; sebut hanya fungsi umum yang pasti benar."}
 ${blocked.length ? `\nPRODUK TIDAK BOLEH DIPAKAI ATAU DISEBUT: ${blocked.map((p) => `${p.key} (${p.name.slice(0, 60)})`).join("; ")}` : ""}
 
-TOKOH TAMU (maksimal 3 dalam satu konten; kosong jika host sendiri):
-${b.guests.map((g) => `- ${g.key} | ${g.name} | ${g.role} | ${g.profile.slice(0, 110)}`).join("\n")}
+${b.guests.length ? `TOKOH TAMU (maksimal 3 dalam satu konten; kosong jika host sendiri):
+${b.guests.map((g) => `- ${g.key} | ${g.name} | ${g.role} | ${g.profile.slice(0, 110)}`).join("\n")}` : "TOKOH TAMU: tidak ada. Host membawakan sendiri."}
 
 OUTFIT HOST (pilih satu key yang cocok dengan situasi):
 ${b.outfits.map((o) => `- ${o.key} | ${o.label}`).join("\n")}
 
-Semua adegan terjadi di ${b.location.slice(0, 60)}… (lokasi tetap, tidak ada lokasi lain). Tulis dalam Bahasa Indonesia yang natural, hangat, tidak hard-sell.`;
+Semua adegan terjadi di satu lokasi tetap (${b.location.slice(0, 60)}…). Tulis dalam Bahasa Indonesia yang natural, hangat, tidak hard-sell.`;
 }
 
 function sourceText(s: SourcePost): string {
@@ -122,7 +122,7 @@ BRIEF KONTEN BARU:
 Format: ${brief.format}
 Judul: ${brief.title}
 Beda dari ide lain: ${brief.angle}
-Produk: ${products.map((p) => `${p.name} (klaim yang boleh diucapkan: ${p.claims || "tidak ada, hanya fungsi umum"})`).join("; ") || "(pilih dari daftar)"}
+Produk: ${products.map((p) => `${p.name} (klaim yang boleh diucapkan: ${p.claims || "tidak ada, hanya fungsi umum"})`).join("; ") || (b.products.length ? "(pilih dari daftar)" : "(ikuti produk / topik konten sumber dan arahan pengguna)")}
 Tokoh tamu: ${guests.map((g) => `${g.name} (${g.role})`).join("; ") || "tidak ada, host sendiri"}
 ${o.direction?.trim() ? `Arahan tambahan: ${o.direction.trim()}` : ""}
 
@@ -131,8 +131,8 @@ ${b.example}
 
 TULIS KONTEN BARU. Syarat:
 - Dialog total ${MIN_WORDS + 5}-${MAX_WORDS - 15} kata, mengalir satu napas, tempo tenang; setiap baris berformat: Nama (aksi singkat): "ucapan". Hanya satu pembicara per baris.
-- ${b.hostName} menyebut nama produk Panasonic yang tampil; nama itu ditulis di [[SPOKEN_NAMES]] dan benar-benar diucapkan di dialog.
-- Baris dialog TERAKHIR: ${b.hostName} (menatap kamera, menutup video): "${b.taglines.signoff}"
+- ${b.hostName} menyebut nama produk atau topik yang tampil${b.requireBrand ? ` (dan merek ${b.requireBrand})` : ""}; nama itu ditulis di [[SPOKEN_NAMES]] dan benar-benar diucapkan di dialog.
+${b.taglines.signoff ? `- Baris dialog TERAKHIR: ${b.hostName} (menatap kamera, menutup video): "${b.taglines.signoff}"` : "- Tutup dengan ajakan CTA singkat yang sama jenisnya dengan konten sumber."}
 - Klaim produk hanya dari "klaim yang boleh diucapkan". Tanpa angka atau janji yang tidak ada di klaim.
 - 4 FRAME untuk storyboard (HOOK, PROBLEM, RTB, CTA + TAGLINE) dan 4 TIMING (0-10s, 10-20s, 20-30s, 30-40s).
 - 4 OVERLAY teks pendek (ditambahkan saat editing). CAPTION: kalimat pembuka, 1-2 kalimat manfaat, ajakan CTA, lalu hashtag.
@@ -206,10 +206,10 @@ export function checkWritten(w: Written, bible: SeriesBible): { hard: string[]; 
   if (words > MAX_WORDS) hard.push(`dialog ${words} kata, terlalu panjang; maksimal ${MAX_WORDS}`);
 
   const last = w.dialogue[w.dialogue.length - 1] ?? "";
-  if (!norm(last).includes(norm(bible.taglines.signoff))) hard.push(`baris dialog terakhir harus ${bible.hostName} mengucapkan "${bible.taglines.signoff}"`);
+  if (bible.taglines.signoff && !norm(last).includes(norm(bible.taglines.signoff))) hard.push(`baris dialog terakhir harus ${bible.hostName} mengucapkan "${bible.taglines.signoff}"`);
 
   const spoken = norm(w.dialogue.join(" "));
-  if (!spoken.includes("panasonic")) hard.push('dialog harus menyebut "Panasonic"');
+  if (bible.requireBrand && !spoken.includes(norm(bible.requireBrand))) hard.push(`dialog harus menyebut "${bible.requireBrand}"`);
   for (const name of w.spokenNames.split(";").map((x) => norm(x)).filter(Boolean)) {
     if (!spoken.includes(name)) soft.push(`nama produk "${name}" tidak terdengar utuh di dialog`);
   }

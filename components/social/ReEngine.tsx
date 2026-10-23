@@ -216,11 +216,6 @@ export default function ReEngine() {
   }
 
   async function generate(row?: Row) {
-    if (!bible) {
-      setError("This workspace has no Series Bible yet. Use “Load the Miss Pan template” in the yellow box at the top, then press Re-engine again.");
-      window.scrollTo({ top: 0, behavior: "smooth" });
-      return;
-    }
     const source = buildSource(row);
     if (!source) return setError(mode === "paste" ? "Paste the caption of a successful post first." : "Pick a successful post first.");
     if (row) setPicked(row.post.media_id);
@@ -283,18 +278,13 @@ export default function ReEngine() {
       {tab === "engine" && (
         <>
           {bible === null && (
-            <div className="flex flex-col gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-xs text-amber-200">
-              <div>
-                <b>{bibleError || `${clientName} has no Series Bible yet.`}</b> The Re-engine buttons need it: it holds the character, apartment and product profiles that every prompt is built from.
-              </div>
-              {!bibleError && (
-                <div className="flex flex-wrap items-center gap-3">
-                  <button type="button" onClick={loadTemplate} disabled={loadingTemplate} className="inline-flex items-center gap-2 rounded-lg bg-amber-400/20 px-4 py-2 text-xs font-bold text-amber-100 hover:bg-amber-400/30 disabled:opacity-50">
-                    {loadingTemplate ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />} Load the Miss Pan template for {clientName}
-                  </button>
-                  <span className="text-[11px] text-amber-200/70">You can edit every detail later in the Series Bible tab.</span>
-                </div>
-              )}
+            <div className="flex flex-wrap items-center gap-3 rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-3 text-[11px] text-slate-400">
+              <span>
+                <b className="text-slate-200">Quick mode.</b> The AI copies the structure of the Reel you pick and writes new scripts, captions and Google Flow prompts. Nothing to set up. The prompts ask Flow to keep the person from your reference photo.
+              </span>
+              <button type="button" onClick={loadTemplate} disabled={loadingTemplate} className="ml-auto shrink-0 text-[11px] font-semibold text-slate-500 hover:text-slate-300 disabled:opacity-50" title="Optional: fixes one character, one apartment and exact product looks in every prompt">
+                {loadingTemplate ? "Saving…" : "Optional: use the Miss Pan Series Bible"}
+              </button>
             </div>
           )}
           {error && (
@@ -333,7 +323,7 @@ export default function ReEngine() {
                             type="button"
                             onClick={() => generate(r)}
                             disabled={busy}
-                            title={bible ? "Generate new contents from this Reel with the settings below" : "Needs the Series Bible: load the template first (yellow box at the top)"}
+                            title="Generate new contents from this Reel with the settings below"
                             className="flex w-[78px] shrink-0 flex-col items-center gap-1 rounded-lg bg-cyan-500/15 px-2 py-2 text-[10px] font-bold text-cyan-200 hover:bg-cyan-500/30 disabled:opacity-40"
                             style={{ boxShadow: "inset 0 0 0 1px rgba(34,211,238,0.35)" }}
                           >
@@ -386,7 +376,7 @@ export default function ReEngine() {
                 <CustomSelect size="sm" value={model} onChange={setModel} options={[{ value: "", label: "Sonnet 5 — balanced (default)" }, ...MODEL_OPTIONS.map((m) => ({ value: m.id, label: m.label }))]} />
               </div>
             </div>
-            {bible && (
+            {bible && bible.products.length + bible.guests.length > 0 && (
               <div className="mt-4 grid gap-4 sm:grid-cols-2">
                 <div>
                   <span className={labelCls}>Products to feature (none selected = the AI chooses and varies them)</span>
@@ -496,7 +486,7 @@ function ItemCard({ n, item, bible }: { n: number; item: ContentItem; bible: Ser
         <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${wordsOk ? "bg-emerald-500/15 text-emerald-300" : "bg-amber-500/15 text-amber-300"}`}>{item.dialogueWords} words of dialogue</span>
       </div>
       <div className="mt-1.5 text-[11px] text-slate-500">
-        {products.join(" + ")}{guests.length ? ` · with ${guests.join(", ")}` : " · host only"} · {item.angle}
+        {products.length ? products.join(" + ") : item.spokenNames}{guests.length ? ` · with ${guests.join(", ")}` : " · host only"} · {item.angle}
       </div>
 
       {item.warnings.length > 0 && (
