@@ -7,6 +7,7 @@ import { useWorkspace } from "@/components/WorkspaceProvider";
 import BibleEditor from "./BibleEditor";
 import { VerdictChip } from "./PostInsightsModal";
 import { MODEL_OPTIONS } from "@/lib/seo/constants";
+import { MISS_PAN_BIBLE } from "@/lib/reengine/missPanBible";
 import { judgeReel, type PostMetrics, type ReelVerdicts } from "@/lib/social/reelBadges";
 import { compactNumber } from "@/lib/format";
 import type { ContentItem, SeriesBible, SourceAnalysis, SourcePost } from "@/lib/reengine/types";
@@ -141,6 +142,19 @@ export default function ReEngine() {
   }, [clientId]);
   useEffect(loadBible, [loadBible]);
 
+  const [loadingTemplate, setLoadingTemplate] = useState(false);
+  async function loadTemplate() {
+    setLoadingTemplate(true);
+    setError("");
+    const next = structuredClone(MISS_PAN_BIBLE);
+    const res = await fetch("/api/reengine/bible", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ clientId, bible: next }) }).then((r) => r.json()).catch(() => ({ ok: false, error: "Network error" }));
+    setLoadingTemplate(false);
+    if (res.ok) {
+      setBible(next);
+      setBibleError("");
+    } else setError(res.error ?? "Could not save the template.");
+  }
+
   // ---- this client's Reels with their Hook / Value / CTA verdicts ----
   useEffect(() => {
     if (ws.loading) return;
@@ -202,6 +216,11 @@ export default function ReEngine() {
   }
 
   async function generate(row?: Row) {
+    if (!bible) {
+      setError("This workspace has no Series Bible yet. Use “Load the Miss Pan template” in the yellow box at the top, then press Re-engine again.");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
     const source = buildSource(row);
     if (!source) return setError(mode === "paste" ? "Paste the caption of a successful post first." : "Pick a successful post first.");
     if (row) setPicked(row.post.media_id);
@@ -264,9 +283,22 @@ export default function ReEngine() {
       {tab === "engine" && (
         <>
           {bible === null && (
-            <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-xs text-amber-200">
-              {bibleError || `${clientName} has no Series Bible yet.`} Open the <button type="button" onClick={() => setTab("bible")} className="font-bold underline">Series Bible</button> tab and load the template first. It holds the character, apartment and product profiles that every prompt is built from.
+            <div className="flex flex-col gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-xs text-amber-200">
+              <div>
+                <b>{bibleError || `${clientName} has no Series Bible yet.`}</b> The Re-engine buttons need it: it holds the character, apartment and product profiles that every prompt is built from.
+              </div>
+              {!bibleError && (
+                <div className="flex flex-wrap items-center gap-3">
+                  <button type="button" onClick={loadTemplate} disabled={loadingTemplate} className="inline-flex items-center gap-2 rounded-lg bg-amber-400/20 px-4 py-2 text-xs font-bold text-amber-100 hover:bg-amber-400/30 disabled:opacity-50">
+                    {loadingTemplate ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />} Load the Miss Pan template for {clientName}
+                  </button>
+                  <span className="text-[11px] text-amber-200/70">You can edit every detail later in the Series Bible tab.</span>
+                </div>
+              )}
             </div>
+          )}
+          {error && (
+            <div className="rounded-lg bg-rose-500/10 px-3 py-2 text-xs text-rose-300">{error}</div>
           )}
 
           {/* 1. source */}
@@ -300,8 +332,8 @@ export default function ReEngine() {
                           <button
                             type="button"
                             onClick={() => generate(r)}
-                            disabled={busy || !bible}
-                            title={bible ? "Generate new contents from this Reel with the settings below" : "Load the Series Bible first"}
+                            disabled={busy}
+                            title={bible ? "Generate new contents from this Reel with the settings below" : "Needs the Series Bible: load the template first (yellow box at the top)"}
                             className="flex w-[78px] shrink-0 flex-col items-center gap-1 rounded-lg bg-cyan-500/15 px-2 py-2 text-[10px] font-bold text-cyan-200 hover:bg-cyan-500/30 disabled:opacity-40"
                             style={{ boxShadow: "inset 0 0 0 1px rgba(34,211,238,0.35)" }}
                           >
@@ -384,7 +416,7 @@ export default function ReEngine() {
             </div>
 
             <div className="mt-5 flex flex-wrap items-center gap-3">
-              <button type="button" onClick={() => generate()} disabled={busy || !bible} className="inline-flex items-center gap-2 rounded-lg bg-cyan-500/20 px-5 py-2.5 text-xs font-bold text-cyan-100 hover:bg-cyan-500/30 disabled:opacity-50" style={{ boxShadow: "inset 0 0 0 1px rgba(34,211,238,0.4)" }}>
+              <button type="button" onClick={() => generate()} disabled={busy} className="inline-flex items-center gap-2 rounded-lg bg-cyan-500/20 px-5 py-2.5 text-xs font-bold text-cyan-100 hover:bg-cyan-500/30 disabled:opacity-50" style={{ boxShadow: "inset 0 0 0 1px rgba(34,211,238,0.4)" }}>
                 {busy ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />} {busy && !busyRow ? "Analysing and writing…" : "Generate from the selected / pasted content"}
               </button>
               {busy && <span className="text-[11px] text-slate-500">Takes 1 to 3 minutes. Please keep this page open.</span>}
