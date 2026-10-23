@@ -110,7 +110,9 @@ export default function ReEngine() {
 
   const [rows, setRows] = useState<Row[]>([]);
   const [loadingPosts, setLoadingPosts] = useState(true);
-  const [mode, setMode] = useState<"posts" | "paste">("posts");
+  const [mode, setMode] = useState<"posts" | "paste" | "radar">("posts");
+  // a winning Reel sent here from the Viral Radar (?radarReel=...)
+  const [radar, setRadar] = useState<{ id: string; clientId: string | null; handle: string; caption: string; script: string; views: number | null; likes: number | null; comments: number | null; outlier: number | null; permalink: string | null; decoded: boolean } | null>(null);
   const [winnersOnly, setWinnersOnly] = useState(false);
   const [picked, setPicked] = useState<string>("");
   const [pasted, setPasted] = useState("");
@@ -178,6 +180,21 @@ export default function ReEngine() {
       .finally(() => setLoadingPosts(false));
   }, [clientId, ws.loading]);
 
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get("radarReel");
+    if (!id) return;
+    fetch(`/api/radar/reel?id=${id}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => {
+        if (!j.ok) return;
+        setRadar(j.reel);
+        setMode("radar");
+        if (j.reel.clientId) ws.setWorkspace(j.reel.clientId);
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const loadRuns = useCallback(() => {
     if (!clientId) return;
     fetch(`/api/reengine/runs?clientId=${clientId}`, { cache: "no-store" }).then((r) => r.json()).then((j) => j.ok && setRuns(j.runs)).catch(() => {});
@@ -196,6 +213,17 @@ export default function ReEngine() {
   const selected = rows.find((r) => r.post.media_id === picked) ?? null;
 
   function buildSource(row?: Row): SourcePost | null {
+    if (!row && mode === "radar" && radar) {
+      return {
+        caption: radar.caption,
+        external: true,
+        account: `@${radar.handle}`,
+        permalink: radar.permalink,
+        script: [radar.script, script.trim()].filter(Boolean).join("\n\n") || undefined,
+        metrics: { views: radar.views, likes: radar.likes, comments: radar.comments },
+        verdicts: { hook: radar.outlier ? `Pemenang: ${radar.outlier}x lebih tinggi dari rata-rata akunnya` : undefined },
+      };
+    }
     if (!row && mode === "paste") return pasted.trim() ? { caption: pasted.trim(), script: script.trim() || undefined } : null;
     const chosen = row ?? selected;
     if (!chosen) return null;
@@ -218,6 +246,7 @@ export default function ReEngine() {
   async function generate(row?: Row) {
     const source = buildSource(row);
     if (!source) return setError(mode === "paste" ? "Paste the caption of a successful post first." : "Pick a successful post first.");
+    if (row) setMode("posts");
     if (row) setPicked(row.post.media_id);
     setBusy(true);
     setBusyRow(row?.post.media_id ?? "");
@@ -296,15 +325,27 @@ export default function ReEngine() {
             <div className="flex flex-wrap items-center gap-3">
               <h2 className="text-sm font-black text-white">1. Pick the successful content</h2>
               <div className="ml-auto flex items-center gap-2 text-[11px]">
-                {(["posts", "paste"] as const).map((m) => (
+                {((radar ? ["radar", "posts", "paste"] : ["posts", "paste"]) as ("radar" | "posts" | "paste")[]).map((m) => (
                   <button key={m} type="button" onClick={() => setMode(m)} className={`rounded-md px-3 py-1.5 font-semibold ${mode === m ? "bg-white/[0.1] text-white" : "text-slate-500 hover:text-slate-300"}`}>
-                    {m === "posts" ? "From my Reels" : "Paste it myself"}
+                    {m === "radar" ? "From Viral Radar" : m === "posts" ? "From my Reels" : "Paste it myself"}
                   </button>
                 ))}
               </div>
             </div>
 
-            {mode === "posts" ? (
+            {mode === "radar" && radar ? (
+              <div className="mt-4 rounded-xl border border-cyan-500/25 bg-cyan-500/[0.05] p-4">
+                <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                  <span className="font-bold text-cyan-200">@{radar.handle}</span>
+                  {radar.outlier != null && <span className="rounded-full bg-amber-500/20 px-2 py-0.5 font-black text-amber-300">{radar.outlier.toFixed(1)}× its usual</span>}
+                  {radar.views != null && <span className="text-slate-400">{compactNumber(radar.views)} views</span>}
+                  <span className={radar.decoded ? "text-emerald-300" : "text-amber-300"}>{radar.decoded ? "decoded: the structure is included" : "not decoded yet: only the caption is used (decode it in the Viral Radar for a better result)"}</span>
+                  {radar.permalink && <a href={radar.permalink} target="_blank" rel="noopener noreferrer" className="ml-auto text-slate-500 hover:text-cyan-300">Open on Instagram</a>}
+                </div>
+                <div className="mt-2 line-clamp-3 text-xs leading-relaxed text-slate-300">{radar.caption || "(no caption)"}</div>
+                <p className="mt-2 text-[11px] text-slate-500">This is another account&apos;s winner. Only its structure and hook pattern are used; the new contents are written fresh.</p>
+              </div>
+            ) : mode === "posts" ? (
               <div className="mt-4">
                 <label className="mb-2 flex items-center gap-2 text-[11px] text-slate-400">
                   <input type="checkbox" checked={winnersOnly} onChange={(e) => setWinnersOnly(e.target.checked)} className="accent-cyan-400" /> Only winners (good Hook and good Value)

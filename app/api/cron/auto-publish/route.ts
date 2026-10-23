@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/supabase/db";
 import { publishSavedKeyword, PublishError } from "@/lib/services/publishKeyword";
 import { runAllAutopilots } from "@/lib/services/autopilot";
+import { runRadarAgent } from "@/lib/services/radar";
 
 export const maxDuration = 300;
 
@@ -14,6 +15,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }
   if (!db) return NextResponse.json({ ok: true, results: [] });
+  const startedAt = Date.now();
 
   // The daily autopilot (one blog post + one Threads post a day, where switched on) runs first.
   const autopilot = await runAllAutopilots().catch((e) => [{ key: "autopilot", ok: false, message: String(e) }]);
@@ -65,5 +67,9 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ ok: true, results, autopilot });
+  // The Viral Radar agent (accounts with the weekly agent switched on, once a week each) uses whatever time is left.
+  const left = 285_000 - (Date.now() - startedAt);
+  const radar = left > 40_000 ? await runRadarAgent({ budgetMs: left - 25_000 }).catch((e) => [{ account: "radar", collected: 0, decoded: 0, brief: false, errors: [String(e)] }]) : [];
+
+  return NextResponse.json({ ok: true, results, autopilot, radar });
 }

@@ -106,6 +106,7 @@ export interface SourcePost {
   account?: string;
   postedAt?: string | null;
   caption: string;
+  external?: boolean; // true = another account's winning Reel (from the Viral Radar), not ours
   script?: string; // optional: the original script / prompt, for a better structure read
   metrics?: { views?: number | null; reach?: number | null; likes?: number | null; comments?: number | null; saves?: number | null; shares?: number | null; avgWatchSec?: number | null; skipRate?: number | null };
   verdicts?: { hook?: string; value?: string; cta?: string; hookWhy?: string; valueWhy?: string; ctaWhy?: string };

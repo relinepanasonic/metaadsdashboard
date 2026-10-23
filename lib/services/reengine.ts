@@ -65,6 +65,7 @@ function sourceText(s: SourcePost): string {
   ].filter(Boolean).join(", ");
   return [
     s.account ? `Akun: ${s.account}` : "",
+    s.external ? "Catatan: ini konten pemenang dari akun LAIN di niche yang sama (bukan milik kita). Tiru struktur, rumus hook, dan polanya saja. Jangan menyalin kalimat, ide spesifik, footage, atau suaranya." : "",
     `Caption:\n${s.caption}`,
     s.script?.trim() ? `Skrip / prompt asli:\n${s.script.trim()}` : "(skrip asli tidak diberikan: simpulkan struktur dari caption)",
     nums ? `Angka: ${nums}` : "",
