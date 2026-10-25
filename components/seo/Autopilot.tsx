@@ -89,14 +89,18 @@ export default function Autopilot() {
   const thSaved = data?.settings.find((s) => s.key === `threads:${selectedBrand}:${handle}`);
   const [thOn, setThOn] = useState(false);
   const [time, setTime] = useState("18:00");
-  const [topic, setTopic] = useState("");
+  const [topicA, setTopicA] = useState("");
+  const [topicB, setTopicB] = useState("");
+  const topic = [topicA, topicB].filter(Boolean).join(" | ");
   const [samples, setSamples] = useState("");
   const [instructions, setInstructions] = useState("");
   const [preview, setPreview] = useState("");
   useEffect(() => {
     setThOn(Boolean(thSaved?.enabled));
     setTime(thSaved?.time_wib ?? "18:00");
-    setTopic(thSaved?.topic ?? "");
+    const [a = "", b = ""] = (thSaved?.topic ?? "").split("|").map((t) => t.trim());
+    setTopicA(a);
+    setTopicB(b);
     setSamples(thSaved?.samples ?? "");
     setInstructions(thSaved?.instructions ?? "");
     setPreview("");
@@ -191,7 +195,7 @@ export default function Autopilot() {
         {accounts.length === 0 ? (
           <p className="mt-3 text-xs text-amber-300">No Threads account for this workspace — connect one on the Clients page.</p>
         ) : (
-          <div className="mt-4 grid gap-4 sm:grid-cols-3">
+          <div className="mt-4 grid gap-4 sm:grid-cols-4">
             <div>
               <span className={labelCls}>Threads account</span>
               <CustomSelect size="sm" value={handle} onChange={setHandle} options={accounts.map((a) => ({ value: a.handle, label: a.connected ? a.handle : `${a.handle} (not connected)` }))} />
@@ -201,30 +205,34 @@ export default function Autopilot() {
               <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className={inputCls} />
             </div>
             <div>
-              <span className={labelCls}>Topic</span>
-              <CustomSelect size="sm" value={topic} onChange={setTopic} placeholder="No topic" options={[{ value: "", label: "No topic" }, ...topics.map((t) => ({ value: t.name, label: t.name }))]} />
+              <span className={labelCls}>Topic tag (day 1, 3, 5…)</span>
+              <CustomSelect size="sm" value={topicA} onChange={setTopicA} placeholder="No topic" options={[{ value: "", label: "No topic" }, ...topics.map((t) => ({ value: t.name, label: t.name }))]} />
             </div>
-            <div className="sm:col-span-3">
+            <div>
+              <span className={labelCls}>Topic tag (day 2, 4, 6…)</span>
+              <CustomSelect size="sm" value={topicB} onChange={setTopicB} placeholder="Same every day" options={[{ value: "", label: "Same every day" }, ...topics.map((t) => ({ value: t.name, label: t.name }))]} />
+            </div>
+            <div className="sm:col-span-4">
               <span className={labelCls}>Sample posts that worked (the AI copies the style, not the words)</span>
               <textarea value={samples} onChange={(e) => setSamples(e.target.value)} rows={7} placeholder="Paste 3–6 of your best Threads posts here, separated by a blank line." className={`${inputCls} resize-y`} />
             </div>
-            <div className="sm:col-span-3">
+            <div className="sm:col-span-4">
               <span className={labelCls}>Extra instructions (optional)</span>
               <textarea value={instructions} onChange={(e) => setInstructions(e.target.value)} rows={2} placeholder="e.g. Always end with a question. Talk about Shopee and TikTok Shop sellers." className={`${inputCls} resize-y`} />
             </div>
-            <div className="sm:col-span-3 flex flex-wrap items-center gap-2">
+            <div className="sm:col-span-4 flex flex-wrap items-center gap-2">
               <button onClick={() => saveThreads()} disabled={busy !== ""} className="rounded-lg bg-cyan-500/20 px-4 py-2 text-xs font-bold text-cyan-200 hover:bg-cyan-500/30 disabled:opacity-50">{busy === "th-save" ? "Saving…" : "Save"}</button>
               <button onClick={() => act(`threads:${selectedBrand}:${handle}`, "preview", "th-prev")} disabled={busy !== "" || !thSaved} className="inline-flex items-center gap-1.5 rounded-lg bg-white/[0.06] px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-white/[0.1] disabled:opacity-40"><Eye size={13} />{busy === "th-prev" ? "Writing…" : "Preview a post"}</button>
               <button onClick={() => act(`threads:${selectedBrand}:${handle}`, "run", "th-run")} disabled={busy !== "" || !thSaved} className="inline-flex items-center gap-1.5 rounded-lg bg-white/[0.06] px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-white/[0.1] disabled:opacity-40"><Play size={13} />{busy === "th-run" ? "Scheduling…" : "Post one now"}</button>
               <span className="text-[11px] text-slate-600">Save first, then preview. Preview posts nothing.</span>
             </div>
             {preview && (
-              <div className="sm:col-span-3 rounded-lg border border-cyan-500/30 bg-cyan-500/5 p-3">
+              <div className="sm:col-span-4 rounded-lg border border-cyan-500/30 bg-cyan-500/5 p-3">
                 <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-cyan-300">Preview ({preview.length}/500)</div>
                 <p className="whitespace-pre-wrap text-xs text-slate-200">{preview}</p>
               </div>
             )}
-            <div className="sm:col-span-3"><LastRun s={thSaved} /></div>
+            <div className="sm:col-span-4"><LastRun s={thSaved} /></div>
           </div>
         )}
       </section>

@@ -86,16 +86,35 @@ export async function runBlog(s: AutopilotSetting, opts: { preview?: boolean } =
 }
 
 // ---- Threads -----------------------------------------------------------------------------------------
-const THREADS_SYSTEM = `Kamu menulis satu postingan Threads dalam Bahasa Indonesia untuk sebuah brand.
+const THREADS_SYSTEM = `Kamu menulis satu postingan Threads dalam Bahasa Indonesia, dari sudut pandang seorang seller Shopee, untuk sebuah brand.
+
+POLA POSTINGAN YANG TERBUKTI JALAN (ikuti urutannya):
+1. HOOK satu baris yang bikin orang berhenti scroll: momen relatable atau kejutan yang dialami seller. Contoh pola: "Pernah nggak, buka Seller Centre pagi-pagi eh orderan udah numpuk, padahal nggak pasang iklan?" atau "Toko sepi berminggu-minggu, tiba-tiba ramai sendiri. Kok bisa?"
+2. ISI 2-4 kalimat pendek, satu ide, tiap kalimat boleh di baris sendiri. Ceritakan kejadian atau insight dengan bahasa ngobrol (aku, kamu, nggak, banget, ya). Jelaskan KENAPA itu terjadi atau apa yang bisa dilakukan seller.
+3. PENUTUP yang mengajak orang membalas: pertanyaan langsung ke seller ("Temen-temen seller, ada yang pernah ngalamin gini juga nggak?") ATAU ajakan komentar ("Komen 'AUDIT' kalau mau Prof bantu cek tokomu, gratis"). Pilih salah satu, jangan keduanya.
 
 ATURAN:
-1. Maksimal 450 karakter. Natural, seperti orang berbicara, bukan iklan kaku.
-2. JANGAN mengarang statistik, persentase, angka, studi kasus, testimoni, atau nama klien.
-3. Jangan memakai hashtag (topik Threads diatur terpisah). Emoji boleh, paling banyak 2.
-4. Awali dengan kalimat pembuka yang menarik perhatian, akhiri dengan pertanyaan atau ajakan singkat.
-5. Tiru GAYA dan struktur contoh yang diberikan, tapi jangan menyalin kalimatnya dan jangan mengulang topik postingan sebelumnya.
+- Maksimal 480 karakter. Paragraf pendek, beri baris kosong antar bagian.
+- JANGAN mengarang angka spesifik, persentase, nominal rupiah, hasil penjualan, studi kasus, testimoni, atau nama klien. Pakai kata seperti "tiba-tiba ramai", "notifikasi bunyi terus", "orderan numpuk".
+- Boleh memakai "aku" untuk momen umum yang relatable, tapi jangan mengklaim hasil nyata tertentu.
+- Tanpa hashtag (topik Threads diatur terpisah). Emoji paling banyak 2, jangan di setiap kalimat.
+- Jangan terdengar seperti iklan atau artikel. Tidak ada tanda seru berlebihan, tidak ada jargon kaku.
+- Tiru GAYA dan struktur contoh yang diberikan, tapi jangan menyalin kalimatnya dan jangan mengulang topik postingan sebelumnya.
 
 Balas HANYA dengan isi postingan itu sendiri: tanpa JSON, tanpa tanda kutip pembungkus, tanpa judul atau penjelasan.`;
+
+// The topic field can hold two tags ("Business Threads | Seller Shopee"); they take turns every other day so the feed does not get stale.
+export function pickTopic(raw: string | null | undefined, dayStartMs: number): string | null {
+  const list = String(raw ?? "").split("|").map((t) => cleanTopic(t)).filter((t): t is string => Boolean(t));
+  if (!list.length) return null;
+  const day = Math.floor((dayStartMs + WIB_MS) / 86_400_000);
+  return list[(day + 1) % list.length];
+}
+
+const TOPIC_ANGLES: [RegExp, string][] = [
+  [/shopee|seller/i, "pengalaman dan tips seller Shopee: orderan, iklan, algoritma, chat, rating, stok, voucher, dan kebiasaan seller sehari-hari"],
+  [/business|bisnis/i, "dunia bisnis dan jualan online secara umum: mindset pemilik usaha, omzet naik turun, keputusan yang sering salah, dan pelajaran dari menjalankan toko"],
+];
 
 export async function runThreads(s: AutopilotSetting, opts: { preview?: boolean; now?: boolean } = {}): Promise<RunResult> {
   if (!db || !s.client_id || !s.handle) return { ok: false, message: "No Threads account selected." };
@@ -124,8 +143,10 @@ export async function runThreads(s: AutopilotSetting, opts: { preview?: boolean;
     if (today?.length) return { ok: true, message: "Today's Threads post is already scheduled." };
   }
 
-  // What to write about: the website's latest blog topic, so the Threads post leads readers to it.
-  let angle = "tips praktis untuk pemilik bisnis dan seller online";
+  // Today's tag, and what to write about: that tag's theme (the two tags take turns), nudged by the latest blog topic.
+  const todayTopic = pickTopic(s.topic, dayStart);
+  const angle = TOPIC_ANGLES.find(([re]) => todayTopic && re.test(todayTopic))?.[1] ?? "tips praktis untuk pemilik bisnis dan seller online";
+  let blogHint = "";
   const { data: sites } = await db.from("search_console_sites").select("id").eq("client_id", s.client_id);
   if (sites?.length) {
     const { data: kw } = await db
@@ -136,7 +157,7 @@ export async function runThreads(s: AutopilotSetting, opts: { preview?: boolean;
       .order("published_at", { ascending: false, nullsFirst: false })
       .limit(1)
       .maybeSingle();
-    if (kw) angle = kw.draft_title || kw.keyword;
+    if (kw) blogHint = kw.draft_title || kw.keyword;
   }
 
   const { data: recent } = await db
@@ -150,7 +171,7 @@ export async function runThreads(s: AutopilotSetting, opts: { preview?: boolean;
   const user =
     `Brand: ${s.handle}\nTopik hari ini: ${angle}\n` +
     (s.instructions?.trim() ? `\nInstruksi tambahan:\n${s.instructions.trim()}\n` : "") +
-    (s.samples?.trim() ? `\nContoh postingan Threads yang berhasil (tiru gayanya):\n${s.samples.trim()}\n` : "") +
+    (s.samples?.trim() ? `\nContoh postingan Threads yang berhasil (tiru pola hook, isi, dan penutupnya):\n${s.samples.trim()}\n` : "") +
     (recent?.length ? `\nPostingan sebelumnya (jangan ulangi topiknya):\n${recent.map((r) => `- ${String(r.caption).slice(0, 120)}`).join("\n")}\n` : "");
 
   const answer = await aiComplete({ system: THREADS_SYSTEM, user, maxTokens: 800, claudeModel: "claude-sonnet-5" });
@@ -168,7 +189,7 @@ export async function runThreads(s: AutopilotSetting, opts: { preview?: boolean;
 
   const { data: post, error } = await db
     .from("scheduled_posts")
-    .insert({ client_id: s.client_id, caption: text, content_type: "text", media: [], scheduled_at: new Date(when).toISOString(), status: "scheduled", created_by: "autopilot", ...(cleanTopic(s.topic) ? { topic: cleanTopic(s.topic) } : {}) })
+    .insert({ client_id: s.client_id, caption: text, content_type: "text", media: [], scheduled_at: new Date(when).toISOString(), status: "scheduled", created_by: "autopilot", ...(todayTopic ? { topic: todayTopic } : {}) })
     .select("id")
     .single();
   if (error || !post) return { ok: false, message: error?.message ?? "Could not schedule the post." };
