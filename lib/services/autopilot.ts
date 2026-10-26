@@ -49,24 +49,47 @@ function plainWords(html: string): number {
   return html.replace(/<[^>]+>/g, " ").split(/\s+/).filter(Boolean).length;
 }
 
+// Two keywords are the same article if, after dropping filler words, one only adds a single word to the other
+// ("payday sale" vs "payday adalah", "ecommerce enablers" vs "enabler") or most words overlap. Writing both splits Google's attention.
+const FILLER = new Set(["cara", "apa", "itu", "adalah", "arti", "artinya", "yang", "di", "ke", "untuk", "dan", "dengan", "panduan", "lengkap", "online", "seller", "tips"]);
+function keywordWords(k: string): string[] {
+  return k.toLowerCase().replace(/e-commerce/g, "ecommerce").split(/[^a-z0-9]+/).filter((w) => w && !FILLER.has(w));
+}
+export function sameTopic(a: string, b: string): boolean {
+  const A = keywordWords(a), B = keywordWords(b);
+  if (!A.length || !B.length) return false;
+  const same = (x: string, y: string) => x === y || x === `${y}s` || y === `${x}s`;
+  const shared = A.filter((x) => B.some((y) => same(x, y))).length;
+  const small = Math.min(A.length, B.length);
+  return (shared === small && Math.max(A.length, B.length) <= small + 1) || shared / (A.length + B.length - shared) >= 0.6;
+}
+
 // ---- blog -------------------------------------------------------------------------------------------
 export async function runBlog(s: AutopilotSetting, opts: { preview?: boolean } = {}): Promise<RunResult> {
   if (!db || !s.site_id) return { ok: false, message: "No website selected." };
 
-  const { data: next } = await db
-    .from("saved_keywords")
-    .select("id,keyword")
-    .eq("site_id", s.site_id)
-    .eq("status", "idea")
-    .order("volume", { ascending: false, nullsFirst: false })
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
-  if (!next) return { ok: false, message: "The keyword list for this website has no unused keywords left. Save more in Research → Keywords." };
+  const [{ data: ideas }, { data: done }] = await Promise.all([
+    db
+      .from("saved_keywords")
+      .select("id,keyword")
+      .eq("site_id", s.site_id)
+      .eq("status", "idea")
+      .order("volume", { ascending: false, nullsFirst: false })
+      .order("created_at", { ascending: true })
+      .limit(200),
+    db.from("saved_keywords").select("keyword").eq("site_id", s.site_id).neq("status", "idea"),
+  ]);
+  if (!ideas?.length) return { ok: false, message: "The keyword list for this website has no unused keywords left. Save more in Research → Keywords." };
+  const written = (done ?? []).map((d) => d.keyword as string);
+  const next = ideas.find((k) => !written.some((w) => sameTopic(k.keyword, w)));
+  const skipped = ideas.slice(0, next ? ideas.indexOf(next) : ideas.length).map((k) => k.keyword);
+  if (!next) return { ok: false, message: `Every unused keyword repeats an article that already exists (${skipped.slice(0, 5).join(", ")}…). Add new topics in Research → Keywords.` };
 
   const model = s.model && isValidModelId(s.model) ? s.model : AUTOPILOT_BLOG_MODEL;
   const draft = await draftPost(next.keyword, model, { autopilot: true });
-  const by = draft.provider === "qwen" ? ` (written by Qwen because Claude was unavailable: ${draft.fellBackBecause ?? "error"})` : "";
+  const by =
+    (draft.provider === "qwen" ? ` (written by Qwen because Claude was unavailable: ${draft.fellBackBecause ?? "error"})` : "") +
+    (skipped.length ? ` Skipped ${skipped.length} keyword(s) that repeat an existing article: ${skipped.join(", ")}.` : "");
 
   const { error: saveErr } = await db
     .from("saved_keywords")
