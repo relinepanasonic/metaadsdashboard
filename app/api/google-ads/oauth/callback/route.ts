@@ -50,6 +50,20 @@ export async function GET(req: NextRequest) {
     );
   }
 
+  const forDrive = sp.get("state")!.startsWith("drive:");
+  if (forDrive) {
+    const done = page(
+      "Google Drive connected",
+      `<h2 style="margin:0 0 8px">Google Drive sign-in worked</h2>
+<p>Copy this value into Vercel → your project → Settings → Environment Variables as <b>GOOGLE_DRIVE_REFRESH_TOKEN</b>, then redeploy. It is shown only once and is not saved anywhere else.</p>
+<textarea readonly onclick="this.select()" style="width:100%;height:120px;background:#111827;color:#a5f3fc;border:1px solid #334155;border-radius:8px;padding:10px;font:12px monospace">${esc(json.refresh_token)}</textarea>
+<p style="color:#94a3b8">Treat it like a password — anyone holding it can read and change files in this Google Drive.</p>
+<p><a style="color:#22d3ee" href="/social-media">Back to Social Media</a></p>`
+    );
+    done.cookies.delete({ name: "gads_oauth_state", path: "/api/google-ads/oauth" });
+    return done;
+  }
+
   const out = page(
     "Google Ads connected",
     `<h2 style="margin:0 0 8px">Google sign-in worked</h2>

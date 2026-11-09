@@ -3,6 +3,7 @@ import { db } from "@/lib/supabase/db";
 import { publishSavedKeyword, PublishError } from "@/lib/services/publishKeyword";
 import { runAllAutopilots } from "@/lib/services/autopilot";
 import { runRadarAgent } from "@/lib/services/radar";
+import { runMaintenance } from "@/lib/services/mediaArchive";
 
 export const maxDuration = 300;
 
@@ -67,9 +68,12 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // Keep Supabase Storage small: copy finished posts' files to Google Drive, delete them, clear abandoned uploads.
+  const storage = await runMaintenance(Math.min(120_000, Math.max(20_000, 285_000 - (Date.now() - startedAt) - 120_000))).catch((e) => `Storage maintenance failed: ${e instanceof Error ? e.message : String(e)}`);
+
   // The Viral Radar agent (accounts with the weekly agent switched on, once a week each) uses whatever time is left.
   const left = 285_000 - (Date.now() - startedAt);
   const radar = left > 40_000 ? await runRadarAgent({ budgetMs: left - 25_000 }).catch((e) => [{ account: "radar", collected: 0, decoded: 0, brief: false, errors: [String(e)] }]) : [];
 
-  return NextResponse.json({ ok: true, results, autopilot, radar });
+  return NextResponse.json({ ok: true, results, autopilot, storage, radar });
 }

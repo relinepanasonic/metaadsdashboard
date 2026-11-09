@@ -1,9 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, CalendarClock, CheckCircle2, Clock, Copy, Film, ImageIcon, Loader2, Pencil, Plug, Plus, RotateCcw, Send, Trash2, XCircle } from "lucide-react";
+import { AlertTriangle, CalendarClock, CheckCircle2, Clock, Copy, Film, HardDrive, ImageIcon, Loader2, Pencil, Plug, Plus, RotateCcw, Send, Trash2, XCircle } from "lucide-react";
 import PostComposer, { type EditablePost, type SchedOptions } from "./PostComposer";
 import MakeSetup from "./MakeSetup";
+import StoragePanel from "./StoragePanel";
 import { useWorkspace } from "@/components/WorkspaceProvider";
 import { CONTENT_LABEL, PLATFORM_LABEL, postState, type ContentType, type MediaItem, type Platform, type PostState, type TargetStatus } from "@/lib/services/scheduler";
 
@@ -174,11 +175,11 @@ export default function Scheduler() {
   const makeOk = lastPollAge != null && lastPollAge <= 130;
 
   function duplicate(p: Post) {
-    setComposer({ duplicate: true, post: { id: p.id, clientId: p.clientId, caption: p.caption, contentType: p.contentType, media: p.media, scheduledAt: p.scheduledAt, status: p.status, targets: [], topic: p.topic ?? null } });
+    setComposer({ duplicate: true, post: { id: p.id, clientId: p.clientId, caption: p.caption, contentType: p.contentType, media: p.media.filter((m) => !m.removed), archivedFiles: p.media.filter((m) => m.removed).length, scheduledAt: p.scheduledAt, status: p.status, targets: [], topic: p.topic ?? null } });
   }
 
   function edit(p: Post) {
-    setComposer({ post: { id: p.id, clientId: p.clientId, caption: p.caption, contentType: p.contentType, media: p.media, scheduledAt: p.scheduledAt, status: p.status, targets: p.targets, topic: p.topic ?? null } });
+    setComposer({ post: { id: p.id, clientId: p.clientId, caption: p.caption, contentType: p.contentType, media: p.media.filter((m) => !m.removed), scheduledAt: p.scheduledAt, status: p.status, targets: p.targets, topic: p.topic ?? null } });
   }
 
   const FILTERS: { id: Filter; label: string }[] = [
@@ -211,6 +212,8 @@ export default function Scheduler() {
           <Plus size={14} /> New post
         </button>
       </div>
+
+      <StoragePanel />
 
       {(showSetup || (!loading && !make.lastPoll && posts.length === 0 && !needsMigration)) && <MakeSetup configured={make.configured} />}
 
@@ -260,7 +263,14 @@ export default function Scheduler() {
                 return (
                   <div key={p.id} className="glass-panel flex flex-wrap items-start gap-4 p-3.5 sm:p-4">
                     <div className="relative h-[84px] w-[60px] shrink-0 overflow-hidden rounded-lg bg-white/[0.04]" style={{ boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.08)" }}>
-                      {first?.kind === "video" ? (
+                      {first?.removed ? (
+                        // The file was archived to Google Drive and deleted from the app's storage.
+                        first.drive ? (
+                          <a href={first.drive.url} target="_blank" rel="noopener noreferrer" title={`Archived in Google Drive: ${first.drive.path}`} className="grid h-full place-items-center text-cyan-300 hover:text-cyan-200"><HardDrive size={18} /></a>
+                        ) : (
+                          <div title="File no longer in storage" className="grid h-full place-items-center text-slate-600"><HardDrive size={18} /></div>
+                        )
+                      ) : first?.kind === "video" ? (
                         <video src={first.url} muted playsInline preload="metadata" className="h-full w-full object-cover" />
                       ) : first ? (
                         // eslint-disable-next-line @next/next/no-img-element -- our own storage URL

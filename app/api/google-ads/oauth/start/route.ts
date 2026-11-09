@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { randomBytes } from "crypto";
 import { getCurrentUser, hasFullAccess } from "@/lib/auth/currentUser";
 import { GOOGLE_OAUTH_SCOPE, googleOauthConfigured } from "@/lib/services/googleAds";
+import { DRIVE_SCOPE } from "@/lib/services/drive";
 
 // Step 1 of connecting Google Ads: send a Founder / Superadmin to Google's
 // consent screen. The callback then shows the refresh token exactly once.
@@ -12,12 +13,14 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "Set GOOGLE_ADS_CLIENT_ID and GOOGLE_ADS_CLIENT_SECRET in Vercel first." }, { status: 400 });
   }
 
-  const state = randomBytes(16).toString("hex");
+  // ?for=drive connects Google Drive (the media archive) through the same Google sign-in; the state says which.
+  const forDrive = req.nextUrl.searchParams.get("for") === "drive";
+  const state = (forDrive ? "drive:" : "") + randomBytes(16).toString("hex");
   const url = new URL("https://accounts.google.com/o/oauth2/v2/auth");
   url.searchParams.set("client_id", process.env.GOOGLE_ADS_CLIENT_ID!);
   url.searchParams.set("redirect_uri", `${req.nextUrl.origin}/api/google-ads/oauth/callback`);
   url.searchParams.set("response_type", "code");
-  url.searchParams.set("scope", GOOGLE_OAUTH_SCOPE);
+  url.searchParams.set("scope", forDrive ? DRIVE_SCOPE : GOOGLE_OAUTH_SCOPE);
   url.searchParams.set("access_type", "offline");
   url.searchParams.set("prompt", "consent");
   url.searchParams.set("state", state);

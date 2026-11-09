@@ -52,6 +52,9 @@ export interface MediaItem {
   kind: "image" | "video";
   name?: string;
   size?: number;
+  // Set once the file has been copied to Google Drive and deleted from Supabase Storage (url no longer works).
+  removed?: boolean;
+  drive?: { id: string; url: string; path: string };
 }
 
 export interface TargetInput {

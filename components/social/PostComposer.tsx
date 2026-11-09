@@ -25,6 +25,7 @@ export interface EditablePost {
   status: string;
   targets: { platform: string; handle: string | null; external_id: string | null }[];
   topic?: string | null;
+  archivedFiles?: number; // files of the original that were moved to Google Drive and can't be reused here
 }
 
 const MAX_BYTES = 50 * 1024 * 1024; // Supabase free-plan file ceiling
@@ -61,6 +62,7 @@ export default function PostComposer({ options, post, duplicate = false, onClose
   const [time, setTime] = useState(init.time);
   const [picked, setPicked] = useState<Set<string>>(() => new Set(duplicate ? [] : (post?.targets ?? []).map((t) => `${t.platform}|${t.handle ?? ""}`)));
   const [uploading, setUploading] = useState(0);
+  const [storagePct, setStoragePct] = useState<number | null>(null); // how full the app's file storage is (warns before the project locks)
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [topic, setTopic] = useState(post?.topic ?? ""); // Threads topic tag
@@ -68,6 +70,12 @@ export default function PostComposer({ options, post, duplicate = false, onClose
   const [newProfile, setNewProfile] = useState<{ platform: Platform; handle: string }>({ platform: "threads", handle: "" });
   const [addingProfile, setAddingProfile] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    fetch("/api/storage").then((r) => r.json()).then((r: { usage?: { bytes: number } | null; limitBytes?: number }) => {
+      if (r.usage && r.limitBytes) setStoragePct((r.usage.bytes / r.limitBytes) * 100);
+    }).catch(() => null);
+  }, []);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -201,6 +209,7 @@ export default function PostComposer({ options, post, duplicate = false, onClose
         {duplicate && (
           <p className="mt-2 rounded-lg bg-cyan-500/10 px-3 py-2 text-[11px] text-cyan-200">
             Copied from an existing post: same caption and media. Pick the accounts you want to post it to, and set the time. The original is not changed.
+            {(post?.archivedFiles ?? 0) > 0 && <b className="mt-1 block text-amber-200">{post!.archivedFiles} file(s) of the original were moved to Google Drive to save space, so they are not copied. Upload them again (download from Drive).</b>}
           </p>
         )}
 
@@ -358,6 +367,12 @@ export default function PostComposer({ options, post, duplicate = false, onClose
           <p className="mt-2 flex items-center gap-1.5 text-[11px] text-amber-300"><AlertTriangle size={12} /> That time has passed — it will be posted the next time Make checks in.</p>
         )}
 
+        {storagePct != null && storagePct >= 80 && (
+          <div className="mt-4 flex items-start gap-2 rounded-lg bg-amber-500/10 p-3 text-xs text-amber-200">
+            <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+            File storage is {storagePct.toFixed(0)}% full. Move finished posts to Google Drive (Social Media page → Archive now) before uploading more videos — at 100% the whole dashboard locks.
+          </div>
+        )}
         {error && <div className="mt-4 rounded-lg bg-rose-500/10 p-3 text-xs text-rose-300">{error}</div>}
 
         <div className="mt-6 flex flex-wrap items-center justify-end gap-2">
